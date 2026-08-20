@@ -10,13 +10,14 @@ st.set_page_config(
 )
 
 # URL de la API de Google Apps Script
-API_URL = "https://script.google.com/macros/s/AKfycby8moCFp2NDWnSapd9TaA0OJPERRZf249QwFF9SJuw3QnKmAlc8RCHJdze-o3QTmCXwCA/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbxTrEcoO4wZgPkLYM8FxJl7bkPHYSCCpMeyxsHigv4Tl1tOXs1DG1KlwTTQIZcz3LYPEA/exec"
 
 st.title("🇺🇳 Plataforma Integral de Gestión de Modelos ONU")
 
 # ---------------------------------------------------------
-# DICCIONARIO Y SELECTOR DE MODELOS
+# DICCIONARIO DE MODELOS (10 SLOTS GENÉRICOS CONFIGURABLES)
 # ---------------------------------------------------------
+# Para agregar o modificar un modelo, solo cambiá el nombre visible, el 'id' y el 'tipo_formulario'
 CONFIG_MODELOS = {
     "MONUCBA 2026": {
         "id": "MONUCBA_2026",
@@ -28,6 +29,34 @@ CONFIG_MODELOS = {
     },
     "MONU Universitario 2026": {
         "id": "MNU_UNI_2026",
+        "tipo_formulario": "ESTANDAR"
+    },
+    "Modelo Ejemplo 04": {
+        "id": "MODELO_04",
+        "tipo_formulario": "ESTANDAR"
+    },
+    "Modelo Ejemplo 05": {
+        "id": "MODELO_05",
+        "tipo_formulario": "ESTANDAR"
+    },
+    "Modelo Ejemplo 06": {
+        "id": "MODELO_06",
+        "tipo_formulario": "ESTANDAR"
+    },
+    "Modelo Ejemplo 07": {
+        "id": "MODELO_07",
+        "tipo_formulario": "ESTANDAR"
+    },
+    "Modelo Ejemplo 08": {
+        "id": "MODELO_08",
+        "tipo_formulario": "ESTANDAR"
+    },
+    "Modelo Ejemplo 09": {
+        "id": "MODELO_09",
+        "tipo_formulario": "ESTANDAR"
+    },
+    "Modelo Ejemplo 10": {
+        "id": "MODELO_10",
         "tipo_formulario": "ESTANDAR"
     }
 }
@@ -65,7 +94,7 @@ if menu == "Preinscripción Escuela":
         
         st.markdown("---")
         
-        # Desglose según la modalidad del evento
+        # Desglose según la modalidad del evento seleccionado
         if tipo_formulario == "MATRIZ_MONUCBA":
             st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad (MONUCBA)")
             col1, col2 = st.columns(2)
@@ -82,6 +111,7 @@ if menu == "Preinscripción Escuela":
             desglose_str = f"5d:{del_5} | 7d_eco:{del_7_ecosoc} | 9d:{del_9_completa} | 7d_cs:{del_7_cs} | davos:{del_davos} | prensa:{del_prensa}"
 
         else:
+            # Formulario Estándar para otros Modelos
             st.markdown("#### Solicitud de Cupos Generales")
             cant_delegaciones = st.number_input("Cantidad de Delegaciones / Países Solicitados", min_value=1, max_value=10, value=1)
             delegados_por_cupo = st.number_input("Integrantes por Delegación", min_value=1, max_value=2, value=2)
