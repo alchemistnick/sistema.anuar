@@ -2,42 +2,45 @@ import streamlit as st
 import requests
 import base64
 
-# Configuración de la página
+# Configuración básica de Streamlit
 st.set_page_config(
     page_title="Sistema Integral de Gestión - MNU",
     page_icon="🇺🇳",
     layout="wide"
 )
 
-# URL de la API de Apps Script
+# URL de la API de Google Apps Script
 API_URL = "https://script.google.com/macros/s/AKfycbxTrEcoO4wZgPkLYM8FxJl7bkPHYSCCpMeyxsHigv4Tl1tOXs1DG1KlwTTQIZcz3LYPEA/exec"
 
-st.title("🇺🇳 Sistema Integral de Gestión de Modelos ONU")
+st.title("🇺🇳 Plataforma Integral de Gestión de Modelos ONU")
 
 # ---------------------------------------------------------
-# SELECTOR GLOBAL DE MODELO (Barra Lateral)
+# DICCIONARIO Y SELECTOR DE MODELOS
 # ---------------------------------------------------------
-st.sidebar.markdown("### 🌐 Selección de Evento")
-modelo_seleccionado = st.sidebar.selectbox(
-    "Elegí el Modelo a Inscribir/Gestionar:",
-    [
-        "MONUCBA 2026", 
-        "MONU Secundarios Local 2026", 
-        "MONU Universitario 2026"
-    ]
-)
-
-# Mapeo a ID de Modelo para la base de datos
-ID_MODELO_MAP = {
-    "MONUCBA 2026": "MONUCBA_2026",
-    "MONU Secundarios Local 2026": "MNU_LOCAL_2026",
-    "MONU Universitario 2026": "MNU_UNI_2026"
+CONFIG_MODELOS = {
+    "MONUCBA 2026": {
+        "id": "MONUCBA_2026",
+        "tipo_formulario": "MATRIZ_MONUCBA"
+    },
+    "MONU Secundarios Local 2026": {
+        "id": "MNU_LOCAL_2026",
+        "tipo_formulario": "ESTANDAR"
+    },
+    "MONU Universitario 2026": {
+        "id": "MNU_UNI_2026",
+        "tipo_formulario": "ESTANDAR"
+    }
 }
-id_modelo_actual = ID_MODELO_MAP[modelo_seleccionado]
+
+st.sidebar.markdown("### 🌐 Selección de Evento")
+modelo_seleccionado = st.sidebar.selectbox("Elegí el Modelo a Inscribir/Gestionar:", list(CONFIG_MODELOS.keys()))
+
+id_modelo_actual = CONFIG_MODELOS[modelo_seleccionado]["id"]
+tipo_formulario = CONFIG_MODELOS[modelo_seleccionado]["tipo_formulario"]
 
 st.sidebar.markdown("---")
 
-# Menú de Navegación
+# Menú de Navegación Lateral
 menu = st.sidebar.radio(
     "Navegación",
     [
@@ -49,21 +52,21 @@ menu = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# MÓDULO 1: PREINSCRIPCIÓN POR ESCUELA (ADAPTATIVO)
+# MÓDULO 1: PREINSCRIPCIÓN
 # ---------------------------------------------------------
 if menu == "Preinscripción Escuela":
     st.subheader(f"Ficha de Inscripción por Escuela - {modelo_seleccionado}")
     
-    with st.form("form_registro_adaptativo"):
-        colegio = st.text_input("Nombre de la Institución / Colegio / Universidad")
+    with st.form("form_registro"):
+        colegio = st.text_input("Nombre de la Institución / Colegio")
         docente = st.text_input("Docente / Tutor Acompañante / Representative")
         email = st.text_input("Correo Electrónico de Contacto")
         clave = st.text_input("Creá una Clave Secreta para el Portal", type="password")
         
         st.markdown("---")
         
-        # LÓGICA DINÁMICA SEGÚN EL MODELO SELECCIONADO
-        if id_modelo_actual == "MONUCBA_2026":
+        # Desglose según la modalidad del evento
+        if tipo_formulario == "MATRIZ_MONUCBA":
             st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad (MONUCBA)")
             col1, col2 = st.columns(2)
             with col1:
@@ -79,7 +82,6 @@ if menu == "Preinscripción Escuela":
             desglose_str = f"5d:{del_5} | 7d_eco:{del_7_ecosoc} | 9d:{del_9_completa} | 7d_cs:{del_7_cs} | davos:{del_davos} | prensa:{del_prensa}"
 
         else:
-            # Formulario Genérico/Estándar para otros modelos
             st.markdown("#### Solicitud de Cupos Generales")
             cant_delegaciones = st.number_input("Cantidad de Delegaciones / Países Solicitados", min_value=1, max_value=10, value=1)
             delegados_por_cupo = st.number_input("Integrantes por Delegación", min_value=1, max_value=2, value=2)
@@ -253,7 +255,7 @@ elif menu == "Panel Secretariado (Admin)":
                 res = requests.get(f"{API_URL}?action=GET_PAGOS_PENDIENTES").json()
                 pagos = res.get("data", [])
                 
-                # Filtrar pagos por el modelo seleccionado en el menú lateral
+                # Filtrar pagos por el modelo activo
                 pagos_filtrados = [p for p in pagos if p.get("id_modelo") == id_modelo_actual or not p.get("id_modelo")]
                 
                 if not pagos_filtrados:
