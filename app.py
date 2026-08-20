@@ -2,74 +2,39 @@ import streamlit as st
 import requests
 import base64
 
-# Configuración básica de Streamlit
 st.set_page_config(
     page_title="Sistema Integral de Gestión - MNU",
     page_icon="🇺🇳",
     layout="wide"
 )
 
-# URL de la API de Google Apps Script
-API_URL = "https://script.google.com/macros/s/AKfycbxTrEcoO4wZgPkLYM8FxJl7bkPHYSCCpMeyxsHigv4Tl1tOXs1DG1KlwTTQIZcz3LYPEA/exec"
+# API URL actualizada
+API_URL = "https://script.google.com/macros/s/AKfycby8moCFp2NDWnSapd9TaA0OJPERRZf249QwFF9SJuw3QnKmAlc8RCHJdze-o3QTmCXwCA/exec"
 
 st.title("🇺🇳 Plataforma Integral de Gestión de Modelos ONU")
 
 # ---------------------------------------------------------
-# DICCIONARIO DE MODELOS (10 SLOTS GENÉRICOS CONFIGURABLES)
+# DICCIONARIO BASE DE MODELOS
 # ---------------------------------------------------------
-# Para agregar o modificar un modelo, solo cambiá el nombre visible, el 'id' y el 'tipo_formulario'
 CONFIG_MODELOS = {
-    "MONUCBA 2026": {
-        "id": "MONUCBA_2026",
-        "tipo_formulario": "MATRIZ_MONUCBA"
-    },
-    "MONU Secundarios Local 2026": {
-        "id": "MNU_LOCAL_2026",
-        "tipo_formulario": "ESTANDAR"
-    },
-    "MONU Universitario 2026": {
-        "id": "MNU_UNI_2026",
-        "tipo_formulario": "ESTANDAR"
-    },
-    "Modelo Ejemplo 04": {
-        "id": "MODELO_04",
-        "tipo_formulario": "ESTANDAR"
-    },
-    "Modelo Ejemplo 05": {
-        "id": "MODELO_05",
-        "tipo_formulario": "ESTANDAR"
-    },
-    "Modelo Ejemplo 06": {
-        "id": "MODELO_06",
-        "tipo_formulario": "ESTANDAR"
-    },
-    "Modelo Ejemplo 07": {
-        "id": "MODELO_07",
-        "tipo_formulario": "ESTANDAR"
-    },
-    "Modelo Ejemplo 08": {
-        "id": "MODELO_08",
-        "tipo_formulario": "ESTANDAR"
-    },
-    "Modelo Ejemplo 09": {
-        "id": "MODELO_09",
-        "tipo_formulario": "ESTANDAR"
-    },
-    "Modelo Ejemplo 10": {
-        "id": "MODELO_10",
-        "tipo_formulario": "ESTANDAR"
-    }
+    "MONUCBA 2026": "MONUCBA_2026",
+    "MONU Secundarios Local 2026": "MNU_LOCAL_2026",
+    "MONU Universitario 2026": "MNU_UNI_2026",
+    "Modelo Evento 04": "MODELO_04",
+    "Modelo Evento 05": "MODELO_05",
+    "Modelo Evento 06": "MODELO_06",
+    "Modelo Evento 07": "MODELO_07",
+    "Modelo Evento 08": "MODELO_08",
+    "Modelo Evento 09": "MODELO_09",
+    "Modelo Evento 10": "MODELO_10"
 }
 
 st.sidebar.markdown("### 🌐 Selección de Evento")
-modelo_seleccionado = st.sidebar.selectbox("Elegí el Modelo a Inscribir/Gestionar:", list(CONFIG_MODELOS.keys()))
-
-id_modelo_actual = CONFIG_MODELOS[modelo_seleccionado]["id"]
-tipo_formulario = CONFIG_MODELOS[modelo_seleccionado]["tipo_formulario"]
+modelo_seleccionado = st.sidebar.selectbox("Elegí el Modelo a Gestionar:", list(CONFIG_MODELOS.keys()))
+id_modelo_actual = CONFIG_MODELOS[modelo_seleccionado]
 
 st.sidebar.markdown("---")
 
-# Menú de Navegación Lateral
 menu = st.sidebar.radio(
     "Navegación",
     [
@@ -80,44 +45,128 @@ menu = st.sidebar.radio(
     ]
 )
 
-# ---------------------------------------------------------
-# MÓDULO 1: PREINSCRIPCIÓN
-# ---------------------------------------------------------
+# =========================================================
+# MÓDULO 1: PREINSCRIPCIÓN (BLOQUES INDEPENDIENTES POR MODELO)
+# =========================================================
 if menu == "Preinscripción Escuela":
-    st.subheader(f"Ficha de Inscripción por Escuela - {modelo_seleccionado}")
+    st.subheader(f"Ficha de Inscripción - {modelo_seleccionado}")
     
-    with st.form("form_registro"):
+    with st.form("form_registro_independiente"):
         colegio = st.text_input("Nombre de la Institución / Colegio")
-        docente = st.text_input("Docente / Tutor Acompañante / Representative")
+        docente = st.text_input("Docente / Tutor Acompañante")
         email = st.text_input("Correo Electrónico de Contacto")
         clave = st.text_input("Creá una Clave Secreta para el Portal", type="password")
         
         st.markdown("---")
+        st.markdown("#### Selección de Delegaciones y Modalidades")
         
-        # Desglose según la modalidad del evento seleccionado
-        if tipo_formulario == "MATRIZ_MONUCBA":
-            st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad (MONUCBA)")
+        tot_alumnos = 0
+        desglose_str = ""
+
+        # -------------------------------------------------
+        # MODELO 1: MONUCBA 2026
+        # -------------------------------------------------
+        if id_modelo_actual == "MONUCBA_2026":
             col1, col2 = st.columns(2)
             with col1:
-                del_5 = st.number_input("Sin CS ni ECOSOC (5 delegados: AG1, AG3, AG6)", min_value=0, max_value=5, value=0)
-                del_7_ecosoc = st.number_input("Sin CS con ECOSOC (7 delegados: AG1, AG3, AG6, ECOSOC)", min_value=0, max_value=5, value=0)
-                del_9_completa = st.number_input("Con CS y ECOSOC (9 delegados: AG1, AG3, AG6, ECOSOC, CS)", min_value=0, max_value=2, value=0)
+                del_5 = st.number_input("Sin CS ni ECOSOC (5 delegados)", min_value=0, max_value=5, value=0, key="m1_del5")
+                del_7_eco = st.number_input("Sin CS con ECOSOC (7 delegados)", min_value=0, max_value=5, value=0, key="m1_del7eco")
+                del_9_comp = st.number_input("Con CS y ECOSOC (9 delegados)", min_value=0, max_value=2, value=0, key="m1_del9")
             with col2:
-                del_7_cs = st.number_input("Con CS sin ECOSOC (7 delegados: AG1, AG3, AG6, CS)", min_value=0, max_value=2, value=0)
-                del_davos = st.number_input("Foro de Davos (Unipersonales)", min_value=0, max_value=5, value=0)
-                del_prensa = st.number_input("Comité de Prensa Internacional (3 delegados)", min_value=0, max_value=2, value=0)
+                del_7_cs = st.number_input("Con CS sin ECOSOC (7 delegados)", min_value=0, max_value=2, value=0, key="m1_del7cs")
+                del_davos = st.number_input("Foro de Davos (Unipersonales)", min_value=0, max_value=5, value=0, key="m1_davos")
+                del_prensa = st.number_input("Comité de Prensa (3 delegados)", min_value=0, max_value=2, value=0, key="m1_prensa")
                 
-            tot_alumnos = (del_5 * 5) + (del_7_ecosoc * 7) + (del_9_completa * 9) + (del_7_cs * 7) + (del_davos * 1) + (del_prensa * 3)
-            desglose_str = f"5d:{del_5} | 7d_eco:{del_7_ecosoc} | 9d:{del_9_completa} | 7d_cs:{del_7_cs} | davos:{del_davos} | prensa:{del_prensa}"
+            tot_alumnos = (del_5 * 5) + (del_7_eco * 7) + (del_9_comp * 9) + (del_7_cs * 7) + (del_davos * 1) + (del_prensa * 3)
+            desglose_str = f"5d:{del_5} | 7d_eco:{del_7_eco} | 9d:{del_9_comp} | 7d_cs:{del_7_cs} | davos:{del_davos} | prensa:{del_prensa}"
 
-        else:
-            # Formulario Estándar para otros Modelos
-            st.markdown("#### Solicitud de Cupos Generales")
-            cant_delegaciones = st.number_input("Cantidad de Delegaciones / Países Solicitados", min_value=1, max_value=10, value=1)
-            delegados_por_cupo = st.number_input("Integrantes por Delegación", min_value=1, max_value=2, value=2)
-            
-            tot_alumnos = cant_delegaciones * delegados_por_cupo
-            desglose_str = f"delegaciones:{cant_delegaciones} | integrantes_por_del:{delegados_por_cupo}"
+        # -------------------------------------------------
+        # MODELO 2: MONU SECUNDARIOS LOCAL 2026
+        # -------------------------------------------------
+        elif id_modelo_actual == "MNU_LOCAL_2026":
+            col1, col2 = st.columns(2)
+            with col1:
+                del_parejas = st.number_input("Delegaciones Generales en Pareja (2 alumnos)", min_value=0, max_value=10, value=0, key="m2_par")
+                del_individuales = st.number_input("Comisiones Especiales Individuales (1 alumno)", min_value=0, max_value=5, value=0, key="m2_ind")
+            with col2:
+                del_prensa_loc = st.number_input("Delegados de Prensa (1 alumno)", min_value=0, max_value=3, value=0, key="m2_pre")
+                
+            tot_alumnos = (del_parejas * 2) + (del_individuales * 1) + (del_prensa_loc * 1)
+            desglose_str = f"parejas:{del_parejas} | individuales:{del_individuales} | prensa:{del_prensa_loc}"
+
+        # -------------------------------------------------
+        # MODELO 3: MONU UNIVERSITARIO 2026
+        # -------------------------------------------------
+        elif id_modelo_actual == "MNU_UNI_2026":
+            col1, col2 = st.columns(2)
+            with col1:
+                embajadores = st.number_input("Bancas de Embajadores (Individual)", min_value=0, max_value=5, value=0, key="m3_emb")
+            with col2:
+                consejeros = st.number_input("Bancas de Consejeros (Individual)", min_value=0, max_value=5, value=0, key="m3_con")
+                
+            tot_alumnos = (embajadores * 1) + (consejeros * 1)
+            desglose_str = f"embajadores:{embajadores} | consejeros:{consejeros}"
+
+        # -------------------------------------------------
+        # MODELO 4: ESTRUCTURA INDEPENDIENTE MODELO 04
+        # -------------------------------------------------
+        elif id_modelo_actual == "MODELO_04":
+            col1, col2 = st.columns(2)
+            with col1:
+                m4_tipo1 = st.number_input("Delegación Estándar (4 delegados)", min_value=0, max_value=5, value=0, key="m4_t1")
+            with col2:
+                m4_tipo2 = st.number_input("Delegación VIP (6 delegados)", min_value=0, max_value=2, value=0, key="m4_t2")
+                
+            tot_alumnos = (m4_tipo1 * 4) + (m4_tipo2 * 6)
+            desglose_str = f"estandar:{m4_tipo1} | vip:{m4_tipo2}"
+
+        # -------------------------------------------------
+        # MODELO 5: ESTRUCTURA INDEPENDIENTE MODELO 05
+        # -------------------------------------------------
+        elif id_modelo_actual == "MODELO_05":
+            m5_cupos = st.number_input("Cantidad de Parejas de Delegados", min_value=0, max_value=10, value=0, key="m5_cup")
+            tot_alumnos = m5_cupos * 2
+            desglose_str = f"parejas:{m5_cupos}"
+
+        # -------------------------------------------------
+        # MODELO 6: ESTRUCTURA INDEPENDIENTE MODELO 06
+        # -------------------------------------------------
+        elif id_modelo_actual == "MODELO_06":
+            m6_cupos = st.number_input("Cantidad de Delegaciones Unipersonales", min_value=0, max_value=10, value=0, key="m6_cup")
+            tot_alumnos = m6_cupos * 1
+            desglose_str = f"unipersonales:{m6_cupos}"
+
+        # -------------------------------------------------
+        # MODELO 7: ESTRUCTURA INDEPENDIENTE MODELO 07
+        # -------------------------------------------------
+        elif id_modelo_actual == "MODELO_07":
+            m7_cupos = st.number_input("Cantidad de Cupos de Delegación", min_value=0, max_value=10, value=0, key="m7_cup")
+            tot_alumnos = m7_cupos * 2
+            desglose_str = f"cupos:{m7_cupos}"
+
+        # -------------------------------------------------
+        # MODELO 8: ESTRUCTURA INDEPENDIENTE MODELO 08
+        # -------------------------------------------------
+        elif id_modelo_actual == "MODELO_08":
+            m8_cupos = st.number_input("Cantidad de Cupos de Delegación", min_value=0, max_value=10, value=0, key="m8_cup")
+            tot_alumnos = m8_cupos * 2
+            desglose_str = f"cupos:{m8_cupos}"
+
+        # -------------------------------------------------
+        # MODELO 9: ESTRUCTURA INDEPENDIENTE MODELO 09
+        # -------------------------------------------------
+        elif id_modelo_actual == "MODELO_09":
+            m9_cupos = st.number_input("Cantidad de Cupos de Delegación", min_value=0, max_value=10, value=0, key="m9_cup")
+            tot_alumnos = m9_cupos * 2
+            desglose_str = f"cupos:{m9_cupos}"
+
+        # -------------------------------------------------
+        # MODELO 10: ESTRUCTURA INDEPENDIENTE MODELO 10
+        # -------------------------------------------------
+        elif id_modelo_actual == "MODELO_10":
+            m10_cupos = st.number_input("Cantidad de Cupos de Delegación", min_value=0, max_value=10, value=0, key="m10_cup")
+            tot_alumnos = m10_cupos * 2
+            desglose_str = f"cupos:{m10_cupos}"
 
         st.info(f"📊 **Total de participantes a inscribir en la nómina:** {tot_alumnos} personas.")
         
@@ -285,7 +334,6 @@ elif menu == "Panel Secretariado (Admin)":
                 res = requests.get(f"{API_URL}?action=GET_PAGOS_PENDIENTES").json()
                 pagos = res.get("data", [])
                 
-                # Filtrar pagos por el modelo activo
                 pagos_filtrados = [p for p in pagos if p.get("id_modelo") == id_modelo_actual or not p.get("id_modelo")]
                 
                 if not pagos_filtrados:
