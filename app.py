@@ -3,14 +3,14 @@ import requests
 import base64
 
 st.set_page_config(
-    page_title="Sistema Integral de Gestión - MNU",
+    page_title="Gestión MNU - Portal Escuelas",
     page_icon="🇺🇳",
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbzCGIacvzBScHWMVOcXJGF-f01asxtpR7Xks6U1VojuAlMpjZu0LB_uG8xaJDfekJU4Rw/exec"
+API_URL = "https://script.google.com/macros/s/AKfycby8moCFp2NDWnSapd9TaA0OJPERRZf249QwFF9SJuw3QnKmAlc8RCHJdze-o3QTmCXwCA/exec"
 
-st.title("🇺🇳 Plataforma Integral de Gestión de Modelos ONU")
+st.title("🇺🇳 Portal de Inscripción y Carga - Modelos ONU")
 
 CONFIG_MODELOS = {
     f"MUNEJEMPLO{i}": f"MUNEJEMPLO_{i}" for i in range(1, 11)
@@ -25,17 +25,16 @@ st.sidebar.markdown("---")
 menu = st.sidebar.radio(
     "Navegación",
     [
-        "Preinscripción Escuela", 
-        "Cargar Comprobante", 
-        "Carga de Nómina y Fichas",
-        "Panel Secretariado (Admin)"
+        "1. Preinscripción Escuela", 
+        "2. Cargar Comprobante", 
+        "3. Carga de Nómina y Fichas"
     ]
 )
 
 # ---------------------------------------------------------
 # MÓDULO 1: PREINSCRIPCIÓN
 # ---------------------------------------------------------
-if menu == "Preinscripción Escuela":
+if menu == "1. Preinscripción Escuela":
     st.subheader(f"Ficha de Inscripción por Escuela - {modelo_seleccionado}")
     
     with st.form("form_registro_unificado"):
@@ -96,7 +95,7 @@ if menu == "Preinscripción Escuela":
 # ---------------------------------------------------------
 # MÓDULO 2: CARGA DE COMPROBANTES DE PAGO
 # ---------------------------------------------------------
-elif menu == "Cargar Comprobante":
+elif menu == "2. Cargar Comprobante":
     st.subheader(f"Subida de Comprobantes - {modelo_seleccionado}")
     
     id_delegacion = st.text_input("Ingresá tu ID de Delegación (Ej: DEL-001)")
@@ -135,7 +134,7 @@ elif menu == "Cargar Comprobante":
 # ---------------------------------------------------------
 # MÓDULO 3: CARGA DE NÓMINA DE LA DELEGACIÓN SELECCIONADA
 # ---------------------------------------------------------
-elif menu == "Carga de Nómina y Fichas":
+elif menu == "3. Carga de Nómina y Fichas":
     st.subheader(f"Carga de Integrantes de la Delegación - {modelo_seleccionado}")
     
     with st.spinner("Cargando escuelas habilitadas..."):
@@ -173,7 +172,6 @@ elif menu == "Carga de Nómina y Fichas":
                 
                 st.success(f"👋 **¡Hola, {nombre_docente}!** Bienvenido/a al portal de **{nombre_colegio}**.")
                 
-                # Obtener países / representaciones asignadas a esta escuela
                 try:
                     res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_delegacion_sel}").json()
                     asignaciones = res_asig.get("data", [])
@@ -184,7 +182,6 @@ elif menu == "Carga de Nómina y Fichas":
                 if not asignaciones:
                     st.info("ℹ️ Tu pago está APROBADO, pero el Secretariado todavía no le asignó países a tu escuela.")
                 else:
-                    # Agrupar las asignaciones por PAÍS
                     paises_dict = {}
                     for a in asignaciones:
                         p = a.get('pais', 'Delegación Sin País')
@@ -197,9 +194,7 @@ elif menu == "Carga de Nómina y Fichas":
                     cant_delegados_pais = len(cargos_pais)
 
                     st.markdown(f"📋 **Cargando Integrantes para {pais_elegido} ({cant_delegados_pais} delegados requeridos)**")
-                    st.caption("Completá los datos y adjuntá la documentación médica de todos los delegados de esta representación:")
 
-                    # FORMULARIO CON TODOS LOS DELEGADOS DEL PAÍS
                     with st.form(key=f"form_pais_{id_delegacion_sel}_{pais_elegido}"):
                         datos_a_enviar = []
                         
@@ -293,67 +288,3 @@ elif menu == "Carga de Nómina y Fichas":
                 st.error("❌ El correo o la contraseña ingresados son incorrectos.")
         else:
             st.info("👈 Por favor ingresá las credenciales para acceder a la carga de la delegación.")
-
-# ---------------------------------------------------------
-# MÓDULO 4: PANEL ADMIN / SECRETARIADO
-# ---------------------------------------------------------
-elif menu == "Panel Secretariado (Admin)":
-    st.subheader(f"Panel de Control - {modelo_seleccionado}")
-    
-    admin_pass = st.text_input("Contraseña de Administrador", type="password")
-    
-    if admin_pass == "Secretaria2026":
-        tab1, tab2 = st.tabs(["Revisión de Pagos", "Revisión de Fichas/Nóminas"])
-        
-        with tab1:
-            st.markdown(f"### Comprobantes Pendientes ({modelo_seleccionado})")
-            if st.button("Actualizar Lista de Pagos"):
-                st.rerun()
-                
-            try:
-                res = requests.get(f"{API_URL}?action=GET_PAGOS_PENDIENTES").json()
-                pagos = res.get("data", [])
-                
-                pagos_filtrados = [p for p in pagos if p.get("id_modelo") == id_modelo_actual or not p.get("id_modelo")]
-                
-                if not pagos_filtrados:
-                    st.success(f"No hay pagos pendientes para {modelo_seleccionado}.")
-                else:
-                    for pago in pagos_filtrados:
-                        with st.expander(f"Pago {pago['id_pago']} - Delegación: {pago['id_delegacion']} - ${pago['monto']}"):
-                            col_a, col_b = st.columns([2, 1])
-                            with col_a:
-                                st.write(f"**Fecha Subida:** {pago['fecha_subida']}")
-                                if pago.get('drive_file_url') and pago['drive_file_url'] != "-":
-                                    st.markdown(f"[📄 Ver Comprobante en Google Drive]({pago['drive_file_url']})", unsafe_allow_html=True)
-                            
-                            with col_b:
-                                if st.button("Aprobar Pago", key=f"app_{pago['id_pago']}"):
-                                    payload = {
-                                        "action": "CAMBIAR_ESTADO_PAGO",
-                                        "usuario": "ADMIN",
-                                        "data": {"id_pago": pago['id_pago'], "nuevo_estado": "APROBADO"}
-                                    }
-                                    r = requests.post(API_URL, json=payload).json()
-                                    if r.get("status") == "SUCCESS":
-                                        st.success("Pago Aprobado")
-                                        st.rerun()
-
-                                if st.button("Rechazar Pago", key=f"rej_{pago['id_pago']}"):
-                                    payload = {
-                                        "action": "CAMBIAR_ESTADO_PAGO",
-                                        "usuario": "ADMIN",
-                                        "data": {"id_pago": pago['id_pago'], "nuevo_estado": "RECHAZADO"}
-                                    }
-                                    r = requests.post(API_URL, json=payload).json()
-                                    if r.get("status") == "SUCCESS":
-                                        st.warning("Pago Rechazado")
-                                        st.rerun()
-            except Exception as e:
-                st.error(f"Error al cargar pagos: {e}")
-
-        with tab2:
-            st.info("Vista de revisión de fichas médicas y autorizaciones.")
-            
-    elif admin_pass:
-        st.error("Contraseña incorrecta.")
