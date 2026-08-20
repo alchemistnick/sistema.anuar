@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # URL de la API de Google Apps Script
-API_URL = "https://script.google.com/macros/s/AKfycbxTrEcoO4wZgPkLYM8FxJl7bkPHYSCCpMeyxsHigv4Tl1tOXs1DG1KlwTTQIZcz3LYPEA/exec"
+API_URL = "https://script.google.com/macros/s/AKfycby8moCFp2NDWnSapd9TaA0OJPERRZf249QwFF9SJuw3QnKmAlc8RCHJdze-o3QTmCXwCA/exec"
 
 st.title("🇺🇳 Plataforma Integral de Gestión de Modelos ONU")
 
