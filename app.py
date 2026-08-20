@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycby8moCFp2NDWnSapd9TaA0OJPERRZf249QwFF9SJuw3QnKmAlc8RCHJdze-o3QTmCXwCA/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbzCGIacvzBScHWMVOcXJGF-f01asxtpR7Xks6U1VojuAlMpjZu0LB_uG8xaJDfekJU4Rw/exec"
 
 st.title("🇺🇳 Plataforma Integral de Gestión de Modelos ONU")
 
