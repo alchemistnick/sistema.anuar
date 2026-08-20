@@ -8,8 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# API URL
-API_URL = "https://script.google.com/macros/s/AKfycbxHqz1HCR0ihxu-fsUMJBYaAwrfqijoldrwtVcFmUfD0k6DMYutB40OQMtu3DQdVlzl3Q/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbynjGcNO62ai9GJeCRAqXTzq7oBzadyVHMvy2VfISojuyxcIC_M0GvS3n9oVHyNQCP2-g/exec"
 
 st.title("🇺🇳 Plataforma Integral de Gestión de Modelos ONU")
 
@@ -37,7 +36,7 @@ menu = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# MÓDULO 1: PREINSCRIPCIÓN (MONUCBA UNIFICADO)
+# MÓDULO 1: PREINSCRIPCIÓN
 # ---------------------------------------------------------
 if menu == "Preinscripción Escuela":
     st.subheader(f"Ficha de Inscripción por Escuela - {modelo_seleccionado}")
@@ -155,7 +154,7 @@ elif menu == "Cargar Comprobante":
                     st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
-# MÓDULO 3: NÓMINA / FICHAS (VALIDACIÓN DE PAGO APROBADO)
+# MÓDULO 3: CARGA DE NÓMINA (CON VALIDACIÓN DE EMAIL Y CLAVE)
 # ---------------------------------------------------------
 elif menu == "Carga de Nómina y Fichas":
     st.subheader(f"Carga de Nómina y Fichas Médicas / Permisos - {modelo_seleccionado}")
@@ -171,93 +170,116 @@ elif menu == "Carga de Nómina y Fichas":
     if not delegaciones_aprobadas:
         st.warning("⚠️ No hay delegaciones con pago **APROBADO** para este modelo aún. Una vez que el Secretariado confirme tu pago, tu escuela aparecerá habilitada en el desplegable.")
     else:
-        opciones_del = {f"{d['id_delegacion']} - {d['nombre_colegio']}": d['id_delegacion'] for d in delegaciones_aprobadas}
+        opciones_del = {f"{d['id_delegacion']} - {d['nombre_colegio']}": d for d in delegaciones_aprobadas}
         del_seleccionada_label = st.selectbox("Seleccioná tu Delegación / Escuela Aprobada:", list(opciones_del.keys()))
-        id_delegacion_sel = opciones_del[del_seleccionada_label]
+        delegacion_actual = opciones_del[del_seleccionada_label]
+        id_delegacion_sel = delegacion_actual['id_delegacion']
 
-        try:
-            res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_delegacion_sel}").json()
-            asignaciones = res_asig.get("data", [])
-        except Exception as e:
-            asignaciones = []
-            st.error(f"Error al consultar asignaciones: {e}")
+        st.markdown("---")
+        st.markdown("#### 🔒 Autenticación de Seguridad de la Delegación")
+        st.caption("Para evitar la modificación no autorizada de datos, ingresá las credenciales usadas al preinscribirte.")
+        
+        col_auth1, col_auth2 = st.columns(2)
+        with col_auth1:
+            email_ingresado = st.text_input("Correo Electrónico de Contacto:", key=f"auth_email_{id_delegacion_sel}")
+        with col_auth2:
+            clave_ingresada = st.text_input("Contraseña Secreta:", type="password", key=f"auth_pass_{id_delegacion_sel}")
 
-        if not asignaciones:
-            st.info("ℹ️ Tu pago está APROBADO, pero el Secretariado todavía no asignó la matriz de países/comités a tu delegación. Contactate con la organización para realizar la asignación de representaciones.")
-        else:
-            opciones_paises = [f"{a['organo']} - {a['pais']}" for a in asignaciones]
-            opciones_paises.append("Autoridad / Asesor / Prensa (Sin país asignado)")
-            
-            st.markdown("---")
-            
-            with st.form("form_nomina_pais", clear_on_submit=True):
-                st.markdown("#### Carga de Datos del Participante")
+        # Validación estricta de mail y clave
+        if email_ingresado and clave_ingresada:
+            email_valido = email_ingresado.strip().lower() == str(delegacion_actual.get('email_contacto', '')).strip().lower()
+            clave_valida = clave_ingresada == str(delegacion_actual.get('secret_hash', ''))
+
+            if email_valido and clave_valida:
+                st.success("✅ Acceso verificado correctamente. Podés continuar con la carga de participantes.")
                 
-                pais_organo_sel = st.selectbox("País y Comité Asignado:", opciones_paises)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    nombre_completo = st.text_input("Nombre y Apellido del Participante")
-                    dni = st.text_input("DNI / Documento de Identidad")
-                    rol_mnu = st.selectbox("Rol en el Modelo", ["DELEGADO", "AUTORIDAD", "PRENSA"])
-                
-                with col2:
-                    alergias = st.text_area("Alergias / Indicaciones Médicas / Dieta Especial", value="Ninguna")
-                
-                st.markdown("---")
-                st.markdown("#### Adjuntar Ficha Médica y Autorización (PDF, JPG, PNG)")
-                
-                col_doc1, col_doc2 = st.columns(2)
-                with col_doc1:
-                    archivo_ficha = st.file_uploader("Ficha Médica Firmada", type=["pdf", "jpg", "png"], key="ficha_p")
-                with col_doc2:
-                    archivo_autorizacion = st.file_uploader("Autorización de Imagen / Permiso", type=["pdf", "jpg", "png"], key="aut_p")
+                try:
+                    res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_delegacion_sel}").json()
+                    asignaciones = res_asig.get("data", [])
+                except Exception as e:
+                    asignaciones = []
+                    st.error(f"Error al consultar asignaciones: {e}")
+
+                if not asignaciones:
+                    st.info("ℹ️ Tu pago está APROBADO, pero el Secretariado todavía no asignó la matriz de países/comités a tu delegación. Contactate con la organización para realizar la asignación de representaciones.")
+                else:
+                    opciones_paises = [f"{a['organo']} - {a['pais']}" for a in asignaciones]
+                    opciones_paises.append("Autoridad / Asesor / Prensa (Sin país asignado)")
                     
-                submitted = st.form_submit_button("Guardar Participante")
-                
-                if submitted:
-                    if not nombre_completo or not dni:
-                        st.error("Completá los campos obligatorios (Nombre Completo y DNI).")
-                    else:
-                        b64_ficha, mime_ficha, ext_ficha = "", "", ""
-                        if archivo_ficha:
-                            b64_ficha = base64.b64encode(archivo_ficha.read()).decode('utf-8')
-                            mime_ficha = archivo_ficha.type
-                            ext_ficha = archivo_ficha.name.split('.')[-1]
+                    st.markdown("---")
+                    
+                    with st.form("form_nomina_pais", clear_on_submit=True):
+                        st.markdown("#### Carga de Datos del Participante")
+                        
+                        pais_organo_sel = st.selectbox("País y Comité Asignado:", opciones_paises)
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            nombre_completo = st.text_input("Nombre y Apellido del Participante")
+                            dni = st.text_input("DNI / Documento de Identidad")
+                            rol_mnu = st.selectbox("Rol en el Modelo", ["DELEGADO", "AUTORIDAD", "PRENSA"])
+                        
+                        with col2:
+                            alergias = st.text_area("Alergias / Indicaciones Médicas / Dieta Especial", value="Ninguna")
+                        
+                        st.markdown("---")
+                        st.markdown("#### Adjuntar Ficha Médica y Autorización (PDF, JPG, PNG)")
+                        
+                        col_doc1, col_doc2 = st.columns(2)
+                        with col_doc1:
+                            archivo_ficha = st.file_uploader("Ficha Médica Firmada", type=["pdf", "jpg", "png"], key="ficha_p")
+                        with col_doc2:
+                            archivo_autorizacion = st.file_uploader("Autorización de Imagen / Permiso", type=["pdf", "jpg", "png"], key="aut_p")
+                            
+                        submitted = st.form_submit_button("Guardar Participante")
+                        
+                        if submitted:
+                            if not nombre_completo or not dni:
+                                st.error("Completá los campos obligatorios (Nombre Completo y DNI).")
+                            else:
+                                b64_ficha, mime_ficha, ext_ficha = "", "", ""
+                                if archivo_ficha:
+                                    b64_ficha = base64.b64encode(archivo_ficha.read()).decode('utf-8')
+                                    mime_ficha = archivo_ficha.type
+                                    ext_ficha = archivo_ficha.name.split('.')[-1]
 
-                        b64_aut, mime_aut, ext_aut = "", "", ""
-                        if archivo_autorizacion:
-                            b64_aut = base64.b64encode(archivo_autorizacion.read()).decode('utf-8')
-                            mime_aut = archivo_autorizacion.type
-                            ext_aut = archivo_autorizacion.name.split('.')[-1]
+                                b64_aut, mime_aut, ext_aut = "", "", ""
+                                if archivo_autorizacion:
+                                    b64_aut = base64.b64encode(archivo_autorizacion.read()).decode('utf-8')
+                                    mime_aut = archivo_autorizacion.type
+                                    ext_aut = archivo_autorizacion.name.split('.')[-1]
 
-                        payload = {
-                            "action": "GUARDAR_NOMINA",
-                            "data": {
-                                "id_modelo": id_modelo_actual,
-                                "id_delegacion": id_delegacion_sel,
-                                "nombre_completo": nombre_completo,
-                                "dni": dni,
-                                "rol_mnu": f"{rol_mnu} ({pais_organo_sel})",
-                                "alergias_medicas": alergias,
-                                "base64_ficha": b64_ficha,
-                                "mime_ficha": mime_ficha,
-                                "ext_ficha": ext_ficha,
-                                "base64_autorizacion": b64_aut,
-                                "mime_autorizacion": mime_aut,
-                                "ext_autorizacion": ext_aut
-                            }
-                        }
+                                payload = {
+                                    "action": "GUARDAR_NOMINA",
+                                    "data": {
+                                        "id_modelo": id_modelo_actual,
+                                        "id_delegacion": id_delegacion_sel,
+                                        "nombre_completo": nombre_completo,
+                                        "dni": dni,
+                                        "rol_mnu": f"{rol_mnu} ({pais_organo_sel})",
+                                        "alergias_medicas": alergias,
+                                        "base64_ficha": b64_ficha,
+                                        "mime_ficha": mime_ficha,
+                                        "ext_ficha": ext_ficha,
+                                        "base64_autorizacion": b64_aut,
+                                        "mime_autorizacion": mime_aut,
+                                        "ext_autorizacion": ext_aut
+                                    }
+                                }
 
-                        with st.spinner("Guardando participante y subiendo archivos..."):
-                            try:
-                                res = requests.post(API_URL, json=payload).json()
-                                if res.get("status") == "SUCCESS":
-                                    st.success(f"¡Participante asignado a **{pais_organo_sel}** guardado con éxito! ID: **{res['data']['id_delegado']}**")
-                                else:
-                                    st.error(f"Error al guardar: {res.get('message')}")
-                            except Exception as e:
-                                st.error(f"Error de conexión: {e}")
+                                with st.spinner("Guardando participante y subiendo archivos..."):
+                                    try:
+                                        res = requests.post(API_URL, json=payload).json()
+                                        if res.get("status") == "SUCCESS":
+                                            st.success(f"¡Participante asignado a **{pais_organo_sel}** guardado con éxito! ID: **{res['data']['id_delegado']}**")
+                                        else:
+                                            st.error(f"Error al guardar: {res.get('message')}")
+                                    except Exception as e:
+                                        st.error(f"Error de conexión: {e}")
+            else:
+                st.error("❌ El correo electrónico o la contraseña ingresada no corresponden a esta delegación.")
+        else:
+            st.info("👈 Por favor ingresá el correo y la contraseña de la escuela para desbloquear el formulario de carga.")
 
 # ---------------------------------------------------------
 # MÓDULO 4: PANEL ADMIN / SECRETARIADO
