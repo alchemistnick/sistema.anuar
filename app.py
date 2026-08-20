@@ -133,12 +133,12 @@ elif menu == "Cargar Comprobante":
                     st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
-# MÓDULO 3: CARGA DE NÓMINA UNIFICADA (TODOS LOS PUESTOS EN UNA SOLA PANTALLA)
+# MÓDULO 3: CARGA DE NÓMINA DE LA DELEGACIÓN SELECCIONADA
 # ---------------------------------------------------------
 elif menu == "Carga de Nómina y Fichas":
-    st.subheader(f"Carga de Nómina y Fichas Médicas / Permisos - {modelo_seleccionado}")
+    st.subheader(f"Carga de Integrantes de la Delegación - {modelo_seleccionado}")
     
-    with st.spinner("Cargando delegaciones habilitadas..."):
+    with st.spinner("Cargando escuelas habilitadas..."):
         try:
             res_del = requests.get(f"{API_URL}?action=GET_DELEGACIONES_APROBADAS&id_modelo={id_modelo_actual}").json()
             delegaciones_aprobadas = res_del.get("data", [])
@@ -147,15 +147,15 @@ elif menu == "Carga de Nómina y Fichas":
             st.error(f"Error al consultar el servidor: {e}")
 
     if not delegaciones_aprobadas:
-        st.warning("⚠️ No hay delegaciones con pago **APROBADO** para este modelo aún.")
+        st.warning("⚠️ No hay escuelas con pago **APROBADO** para este modelo aún.")
     else:
         opciones_del = {f"{d['id_delegacion']} - {d['nombre_colegio']}": d for d in delegaciones_aprobadas}
-        del_seleccionada_label = st.selectbox("Seleccioná tu Delegación / Escuela Aprobada:", list(opciones_del.keys()))
+        del_seleccionada_label = st.selectbox("Seleccioná tu Escuela / Institución Aprobada:", list(opciones_del.keys()))
         delegacion_actual = opciones_del[del_seleccionada_label]
         id_delegacion_sel = delegacion_actual['id_delegacion']
 
         st.markdown("---")
-        st.markdown("#### 🔒 Autenticación de Seguridad")
+        st.markdown("#### 🔒 Autenticación del Docente")
         
         col_auth1, col_auth2 = st.columns(2)
         with col_auth1:
@@ -171,8 +171,9 @@ elif menu == "Carga de Nómina y Fichas":
                 nombre_docente = delegacion_actual.get('docente_cargo', 'Docente/Tutor')
                 nombre_colegio = delegacion_actual.get('nombre_colegio', '')
                 
-                st.success(f"👋 **¡Hola, {nombre_docente}!** Bienvenido/a al portal de carga de **{nombre_colegio}**.")
+                st.success(f"👋 **¡Hola, {nombre_docente}!** Bienvenido/a al portal de **{nombre_colegio}**.")
                 
+                # Obtener países / representaciones asignadas a esta escuela
                 try:
                     res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_delegacion_sel}").json()
                     asignaciones = res_asig.get("data", [])
@@ -181,112 +182,117 @@ elif menu == "Carga de Nómina y Fichas":
                     st.error(f"Error al consultar asignaciones: {e}")
 
                 if not asignaciones:
-                    st.info("ℹ️ Tu pago está APROBADO, pero el Secretariado todavía no asignó la matriz de países/comités a tu delegación.")
+                    st.info("ℹ️ Tu pago está APROBADO, pero el Secretariado todavía no le asignó países a tu escuela.")
                 else:
-                    cant_cupos = len(asignaciones)
-                    st.markdown(f"📋 **Formulario Unificado de Nómina ({cant_cupos} lugares asignados)**")
-                    st.caption("Completá la información de todos tus estudiantes y adjuntá sus fichas. Al finalizar, hacé clic en el botón del fondo para guardar la delegación completa.")
-                    
-                    # UN SOLO FORMULARIO QUE CONTIENE A TODOS LOS DELEGADOS
-                    with st.form(key=f"form_unificado_{id_delegacion_sel}"):
+                    # Agrupar las asignaciones por PAÍS
+                    paises_dict = {}
+                    for a in asignaciones:
+                        p = a.get('pais', 'Delegación Sin País')
+                        if p not in paises_dict:
+                            paises_dict[p] = []
+                        paises_dict[p].append(a)
+
+                    pais_elegido = st.selectbox("🌍 Seleccioná el País / Delegación a cargar:", list(paises_dict.keys()))
+                    cargos_pais = paises_dict[pais_elegido]
+                    cant_delegados_pais = len(cargos_pais)
+
+                    st.markdown(f"📋 **Cargando Integrantes para {pais_elegido} ({cant_delegados_pais} delegados requeridos)**")
+                    st.caption("Completá los datos y adjuntá la documentación médica de todos los delegados de esta representación:")
+
+                    # FORMULARIO CON TODOS LOS DELEGADOS DEL PAÍS
+                    with st.form(key=f"form_pais_{id_delegacion_sel}_{pais_elegido}"):
                         datos_a_enviar = []
                         
-                        for idx, asig in enumerate(asignaciones, 1):
-                            cargo_label = f"Puesto #{idx}: {asig.get('organo', 'Comité')} - {asig.get('pais', 'Representación')}"
-                            
-                            st.markdown(f"### 📌 {cargo_label}")
+                        for idx, cargo in enumerate(cargos_pais, 1):
+                            comision_nombre = cargo.get('organo', f'Comisión #{idx}')
+                            st.markdown(f"### 👤 Delegado #{idx}: {pais_elegido} - {comision_nombre}")
                             
                             col1, col2 = st.columns(2)
                             with col1:
-                                nom = st.text_input("Nombre y Apellido", key=f"nom_{id_delegacion_sel}_{idx}")
-                                dni = st.text_input("DNI / Documento", key=f"dni_{id_delegacion_sel}_{idx}")
-                                rol = st.selectbox("Rol", ["DELEGADO", "AUTORIDAD", "PRENSA"], key=f"rol_{id_delegacion_sel}_{idx}")
+                                nom = st.text_input("Nombre y Apellido del Estudiante", key=f"nom_{id_delegacion_sel}_{pais_elegido}_{idx}")
+                                dni = st.text_input("DNI / Documento", key=f"dni_{id_delegacion_sel}_{pais_elegido}_{idx}")
                             
                             with col2:
-                                ale = st.text_area("Alergias / Dieta Especial / Cuidados Médicos", value="Ninguna", key=f"ale_{id_delegacion_sel}_{idx}")
+                                ale = st.text_area("Alergias / Dieta Especial / Cuidados Médicos", value="Ninguna", key=f"ale_{id_delegacion_sel}_{pais_elegido}_{idx}")
                             
                             col_doc1, col_doc2 = st.columns(2)
                             with col_doc1:
-                                fic = st.file_uploader("Ficha Médica (PDF/Foto)", type=["pdf", "jpg", "png"], key=f"fic_{id_delegacion_sel}_{idx}")
+                                fic = st.file_uploader("Ficha Médica (PDF/Foto)", type=["pdf", "jpg", "png"], key=f"fic_{id_delegacion_sel}_{pais_elegido}_{idx}")
                             with col_doc2:
-                                aut = st.file_uploader("Autorización de Imagen (PDF/Foto)", type=["pdf", "jpg", "png"], key=f"aut_{id_delegacion_sel}_{idx}")
+                                aut = st.file_uploader("Autorización de Imagen (PDF/Foto)", type=["pdf", "jpg", "png"], key=f"aut_{id_delegacion_sel}_{pais_elegido}_{idx}")
                             
                             st.markdown("---")
                             
-                            # Guardamos la estructura del elemento
                             datos_a_enviar.append({
                                 "idx": idx,
-                                "cargo_label": cargo_label,
-                                "organo_pais": f"{asig.get('organo')} - {asig.get('pais')}",
+                                "pais": pais_elegido,
+                                "comision": comision_nombre,
                                 "nom": nom,
                                 "dni": dni,
-                                "rol": rol,
                                 "ale": ale,
                                 "fic": fic,
                                 "aut": aut
                             })
 
-                        btn_guardar_todo = st.form_submit_button("🚀 GUARDAR NÓMINA COMPLETA DE LA DELEGACIÓN")
+                        btn_guardar_pais = st.form_submit_button(f"🚀 GUARDAR TODOS LOS DELEGADOS DE {pais_elegido.upper()}")
 
-                    if btn_guardar_todo:
-                        # Validación preliminar: que al menos el primer participante tenga datos o todos los campos obligatorios
+                    if btn_guardar_pais:
                         errores = []
                         for d in datos_a_enviar:
-                            if (d["nom"] and not d["dni"]) or (d["dni"] and not d["nom"]):
-                                errores.append(f"Faltan datos obligatorios en {d['cargo_label']} (requiere Nombre y DNI).")
+                            if not d["nom"] or not d["dni"]:
+                                errores.append(f"Faltan datos obligatorios en Delegado #{d['idx']} ({d['comision']}).")
 
                         if errores:
                             for err in errores:
                                 st.error(err)
                         else:
                             con_exito = 0
-                            with st.spinner("Guardando nómina completa y subiendo fichas a Google Drive..."):
+                            with st.spinner(f"Subiendo fichas y guardando delegación de {pais_elegido}..."):
                                 for d in datos_a_enviar:
-                                    if d["nom"] and d["dni"]:
-                                        b64_ficha, mime_ficha, ext_ficha = "", "", ""
-                                        if d["fic"]:
-                                            b64_ficha = base64.b64encode(d["fic"].read()).decode('utf-8')
-                                            mime_ficha = d["fic"].type
-                                            ext_ficha = d["fic"].name.split('.')[-1]
+                                    b64_ficha, mime_ficha, ext_ficha = "", "", ""
+                                    if d["fic"]:
+                                        b64_ficha = base64.b64encode(d["fic"].read()).decode('utf-8')
+                                        mime_ficha = d["fic"].type
+                                        ext_ficha = d["fic"].name.split('.')[-1]
 
-                                        b64_aut, mime_aut, ext_aut = "", "", ""
-                                        if d["aut"]:
-                                            b64_aut = base64.b64encode(d["aut"].read()).decode('utf-8')
-                                            mime_aut = d["aut"].type
-                                            ext_aut = d["aut"].name.split('.')[-1]
+                                    b64_aut, mime_aut, ext_aut = "", "", ""
+                                    if d["aut"]:
+                                        b64_aut = base64.b64encode(d["aut"].read()).decode('utf-8')
+                                        mime_aut = d["aut"].type
+                                        ext_aut = d["aut"].name.split('.')[-1]
 
-                                        payload = {
-                                            "action": "GUARDAR_NOMINA",
-                                            "data": {
-                                                "id_modelo": id_modelo_actual,
-                                                "id_delegacion": id_delegacion_sel,
-                                                "nombre_completo": d["nom"],
-                                                "dni": d["dni"],
-                                                "rol_mnu": f"{d['rol']} ({d['organo_pais']})",
-                                                "alergias_medicas": d["ale"],
-                                                "base64_ficha": b64_ficha,
-                                                "mime_ficha": mime_ficha,
-                                                "ext_ficha": ext_ficha,
-                                                "base64_autorizacion": b64_aut,
-                                                "mime_autorizacion": mime_aut,
-                                                "ext_autorizacion": ext_aut
-                                            }
+                                    payload = {
+                                        "action": "GUARDAR_NOMINA",
+                                        "data": {
+                                            "id_modelo": id_modelo_actual,
+                                            "id_delegacion": id_delegacion_sel,
+                                            "nombre_completo": d["nom"],
+                                            "dni": d["dni"],
+                                            "rol_mnu": f"DELEGADO ({d['pais']} - {d['comision']})",
+                                            "alergias_medicas": d["ale"],
+                                            "base64_ficha": b64_ficha,
+                                            "mime_ficha": mime_ficha,
+                                            "ext_ficha": ext_ficha,
+                                            "base64_autorizacion": b64_aut,
+                                            "mime_autorizacion": mime_aut,
+                                            "ext_autorizacion": ext_aut
                                         }
+                                    }
 
-                                        try:
-                                            res = requests.post(API_URL, json=payload).json()
-                                            if res.get("status") == "SUCCESS":
-                                                con_exito += 1
-                                        except Exception:
-                                            pass
+                                    try:
+                                        res = requests.post(API_URL, json=payload).json()
+                                        if res.get("status") == "SUCCESS":
+                                            con_exito += 1
+                                    except Exception:
+                                        pass
 
                             if con_exito > 0:
                                 st.balloons()
-                                st.success(f"🎉 ¡Se procesaron y guardaron **{con_exito} de {len(datos_a_enviar)}** registros exitosamente en la base de datos!")
+                                st.success(f"🎉 ¡Se guardó exitosamente la delegación completa de **{pais_elegido}** ({con_exito} estudiantes)!")
             else:
-                st.error("❌ El correo o la contraseña ingresados son incorrectos para esta delegación.")
+                st.error("❌ El correo o la contraseña ingresados son incorrectos.")
         else:
-            st.info("👈 Por favor ingresá las credenciales para desbloquear la nómina de participantes.")
+            st.info("👈 Por favor ingresá las credenciales para acceder a la carga de la delegación.")
 
 # ---------------------------------------------------------
 # MÓDULO 4: PANEL ADMIN / SECRETARIADO
