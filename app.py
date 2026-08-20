@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbzCGIacvzBScHWMVOcXJGF-f01asxtpR7Xks6U1VojuAlMpjZu0LB_uG8xaJDfekJU4Rw/exec"
+API_URL = "https://script.google.com/macros/s/AKfycby8moCFp2NDWnSapd9TaA0OJPERRZf249QwFF9SJuw3QnKmAlc8RCHJdze-o3QTmCXwCA/exec"
 
 st.title("🇺🇳 Plataforma Integral de Gestión de Modelos ONU")
 
@@ -133,7 +133,7 @@ elif menu == "Cargar Comprobante":
                     st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
-# MÓDULO 3: NÓMINA (SALUDO PERSONALIZADO Y CASILLEROS EXACTOS)
+# MÓDULO 3: CARGA DE NÓMINA UNIFICADA (TODOS LOS PUESTOS EN UNA SOLA PANTALLA)
 # ---------------------------------------------------------
 elif menu == "Carga de Nómina y Fichas":
     st.subheader(f"Carga de Nómina y Fichas Médicas / Permisos - {modelo_seleccionado}")
@@ -168,13 +168,11 @@ elif menu == "Carga de Nómina y Fichas":
             clave_valida = clave_ingresada == str(delegacion_actual.get('secret_hash', ''))
 
             if email_valido and clave_valida:
-                # 1. SALUDO PERSONALIZADO AL DOCENTE
                 nombre_docente = delegacion_actual.get('docente_cargo', 'Docente/Tutor')
                 nombre_colegio = delegacion_actual.get('nombre_colegio', '')
                 
                 st.success(f"👋 **¡Hola, {nombre_docente}!** Bienvenido/a al portal de carga de **{nombre_colegio}**.")
                 
-                # 2. CARGA DE ASIGNACIONES PARAMETRIZADAS
                 try:
                     res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_delegacion_sel}").json()
                     asignaciones = res_asig.get("data", [])
@@ -186,57 +184,86 @@ elif menu == "Carga de Nómina y Fichas":
                     st.info("ℹ️ Tu pago está APROBADO, pero el Secretariado todavía no asignó la matriz de países/comités a tu delegación.")
                 else:
                     cant_cupos = len(asignaciones)
-                    st.markdown(f"📋 **Tenés asignados {cant_cupos} lugares/representaciones en total.** A continuación podés cargar a los alumnos participantes:")
+                    st.markdown(f"📋 **Formulario Unificado de Nómina ({cant_cupos} lugares asignados)**")
+                    st.caption("Completá la información de todos tus estudiantes y adjuntá sus fichas. Al finalizar, hacé clic en el botón del fondo para guardar la delegación completa.")
                     
-                    # 3. LISTADO EXACTO DE CASILLEROS PARAMETRIZADOS
-                    for idx, asig in enumerate(asignaciones, 1):
-                        cargo_label = f"Lugar #{idx}: {asig.get('organo', 'Comité')} - {asig.get('pais', 'País/Representación')}"
+                    # UN SOLO FORMULARIO QUE CONTIENE A TODOS LOS DELEGADOS
+                    with st.form(key=f"form_unificado_{id_delegacion_sel}"):
+                        datos_a_enviar = []
                         
-                        with st.expander(f"📌 {cargo_label}", expanded=False):
-                            with st.form(f"form_participante_{id_delegacion_sel}_{idx}", clear_on_submit=True):
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    nombre_completo = st.text_input("Nombre y Apellido del Participante", key=f"nom_{idx}")
-                                    dni = st.text_input("DNI / Documento de Identidad", key=f"dni_{idx}")
-                                    rol_mnu = st.selectbox("Rol", ["DELEGADO", "AUTORIDAD", "PRENSA"], key=f"rol_{idx}")
-                                
-                                with col2:
-                                    alergias = st.text_area("Alergias / Dieta Especial / Indicaciones Médicas", value="Ninguna", key=f"ale_{idx}")
-                                
-                                st.markdown("##### Adjuntar Documentación")
-                                col_doc1, col_doc2 = st.columns(2)
-                                with col_doc1:
-                                    archivo_ficha = st.file_uploader("Ficha Médica Firmada", type=["pdf", "jpg", "png"], key=f"ficha_{idx}")
-                                with col_doc2:
-                                    archivo_autorizacion = st.file_uploader("Autorización de Imagen / Permiso", type=["pdf", "jpg", "png"], key=f"aut_{idx}")
-                                    
-                                submitted = st.form_submit_button(f"Guardar {cargo_label}")
-                                
-                                if submitted:
-                                    if not nombre_completo or not dni:
-                                        st.error("Completá Nombre y DNI.")
-                                    else:
+                        for idx, asig in enumerate(asignaciones, 1):
+                            cargo_label = f"Puesto #{idx}: {asig.get('organo', 'Comité')} - {asig.get('pais', 'Representación')}"
+                            
+                            st.markdown(f"### 📌 {cargo_label}")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                nom = st.text_input("Nombre y Apellido", key=f"nom_{id_delegacion_sel}_{idx}")
+                                dni = st.text_input("DNI / Documento", key=f"dni_{id_delegacion_sel}_{idx}")
+                                rol = st.selectbox("Rol", ["DELEGADO", "AUTORIDAD", "PRENSA"], key=f"rol_{id_delegacion_sel}_{idx}")
+                            
+                            with col2:
+                                ale = st.text_area("Alergias / Dieta Especial / Cuidados Médicos", value="Ninguna", key=f"ale_{id_delegacion_sel}_{idx}")
+                            
+                            col_doc1, col_doc2 = st.columns(2)
+                            with col_doc1:
+                                fic = st.file_uploader("Ficha Médica (PDF/Foto)", type=["pdf", "jpg", "png"], key=f"fic_{id_delegacion_sel}_{idx}")
+                            with col_doc2:
+                                aut = st.file_uploader("Autorización de Imagen (PDF/Foto)", type=["pdf", "jpg", "png"], key=f"aut_{id_delegacion_sel}_{idx}")
+                            
+                            st.markdown("---")
+                            
+                            # Guardamos la estructura del elemento
+                            datos_a_enviar.append({
+                                "idx": idx,
+                                "cargo_label": cargo_label,
+                                "organo_pais": f"{asig.get('organo')} - {asig.get('pais')}",
+                                "nom": nom,
+                                "dni": dni,
+                                "rol": rol,
+                                "ale": ale,
+                                "fic": fic,
+                                "aut": aut
+                            })
+
+                        btn_guardar_todo = st.form_submit_button("🚀 GUARDAR NÓMINA COMPLETA DE LA DELEGACIÓN")
+
+                    if btn_guardar_todo:
+                        # Validación preliminar: que al menos el primer participante tenga datos o todos los campos obligatorios
+                        errores = []
+                        for d in datos_a_enviar:
+                            if (d["nom"] and not d["dni"]) or (d["dni"] and not d["nom"]):
+                                errores.append(f"Faltan datos obligatorios en {d['cargo_label']} (requiere Nombre y DNI).")
+
+                        if errores:
+                            for err in errores:
+                                st.error(err)
+                        else:
+                            con_exito = 0
+                            with st.spinner("Guardando nómina completa y subiendo fichas a Google Drive..."):
+                                for d in datos_a_enviar:
+                                    if d["nom"] and d["dni"]:
                                         b64_ficha, mime_ficha, ext_ficha = "", "", ""
-                                        if archivo_ficha:
-                                            b64_ficha = base64.b64encode(archivo_ficha.read()).decode('utf-8')
-                                            mime_ficha = archivo_ficha.type
-                                            ext_ficha = archivo_ficha.name.split('.')[-1]
+                                        if d["fic"]:
+                                            b64_ficha = base64.b64encode(d["fic"].read()).decode('utf-8')
+                                            mime_ficha = d["fic"].type
+                                            ext_ficha = d["fic"].name.split('.')[-1]
 
                                         b64_aut, mime_aut, ext_aut = "", "", ""
-                                        if archivo_autorizacion:
-                                            b64_aut = base64.b64encode(archivo_autorizacion.read()).decode('utf-8')
-                                            mime_aut = archivo_autorizacion.type
-                                            ext_aut = archivo_autorizacion.name.split('.')[-1]
+                                        if d["aut"]:
+                                            b64_aut = base64.b64encode(d["aut"].read()).decode('utf-8')
+                                            mime_aut = d["aut"].type
+                                            ext_aut = d["aut"].name.split('.')[-1]
 
                                         payload = {
                                             "action": "GUARDAR_NOMINA",
                                             "data": {
                                                 "id_modelo": id_modelo_actual,
                                                 "id_delegacion": id_delegacion_sel,
-                                                "nombre_completo": nombre_completo,
-                                                "dni": dni,
-                                                "rol_mnu": f"{rol_mnu} ({asig.get('organo')} - {asig.get('pais')})",
-                                                "alergias_medicas": alergias,
+                                                "nombre_completo": d["nom"],
+                                                "dni": d["dni"],
+                                                "rol_mnu": f"{d['rol']} ({d['organo_pais']})",
+                                                "alergias_medicas": d["ale"],
                                                 "base64_ficha": b64_ficha,
                                                 "mime_ficha": mime_ficha,
                                                 "ext_ficha": ext_ficha,
@@ -246,19 +273,20 @@ elif menu == "Carga de Nómina y Fichas":
                                             }
                                         }
 
-                                        with st.spinner("Guardando datos y archivos..."):
-                                            try:
-                                                res = requests.post(API_URL, json=payload).json()
-                                                if res.get("status") == "SUCCESS":
-                                                    st.success(f"¡Cargado con éxito para **{cargo_label}**!")
-                                                else:
-                                                    st.error(f"Error: {res.get('message')}")
-                                            except Exception as e:
-                                                st.error(f"Error de conexión: {e}")
+                                        try:
+                                            res = requests.post(API_URL, json=payload).json()
+                                            if res.get("status") == "SUCCESS":
+                                                con_exito += 1
+                                        except Exception:
+                                            pass
+
+                            if con_exito > 0:
+                                st.balloons()
+                                st.success(f"🎉 ¡Se procesaron y guardaron **{con_exito} de {len(datos_a_enviar)}** registros exitosamente en la base de datos!")
             else:
                 st.error("❌ El correo o la contraseña ingresados son incorrectos para esta delegación.")
         else:
-            st.info("👈 Por favor ingresá las credenciales para acceder a la lista de participantes asignados.")
+            st.info("👈 Por favor ingresá las credenciales para desbloquear la nómina de participantes.")
 
 # ---------------------------------------------------------
 # MÓDULO 4: PANEL ADMIN / SECRETARIADO
