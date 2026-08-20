@@ -4,17 +4,40 @@ import base64
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Gestión MONUCBA 2026",
+    page_title="Sistema Integral de Gestión - MNU",
     page_icon="🇺🇳",
     layout="wide"
 )
 
 # URL de la API de Apps Script
-API_URL = "https://script.google.com/macros/s/AKfycbwjrbQ5pDVLSCRTK9zAYtAsic9AbFtj6zrwa-E3C1q5aARd_dJUyWFranw9tRLOKlAlnQ/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbxTrEcoO4wZgPkLYM8FxJl7bkPHYSCCpMeyxsHigv4Tl1tOXs1DG1KlwTTQIZcz3LYPEA/exec"
 
-st.title("🇺🇳 Sistema Integral de Gestión - MONUCBA 2026")
+st.title("🇺🇳 Sistema Integral de Gestión de Modelos ONU")
 
-# Menú lateral
+# ---------------------------------------------------------
+# SELECTOR GLOBAL DE MODELO (Barra Lateral)
+# ---------------------------------------------------------
+st.sidebar.markdown("### 🌐 Selección de Evento")
+modelo_seleccionado = st.sidebar.selectbox(
+    "Elegí el Modelo a Inscribir/Gestionar:",
+    [
+        "MONUCBA 2026", 
+        "MONU Secundarios Local 2026", 
+        "MONU Universitario 2026"
+    ]
+)
+
+# Mapeo a ID de Modelo para la base de datos
+ID_MODELO_MAP = {
+    "MONUCBA 2026": "MONUCBA_2026",
+    "MONU Secundarios Local 2026": "MNU_LOCAL_2026",
+    "MONU Universitario 2026": "MNU_UNI_2026"
+}
+id_modelo_actual = ID_MODELO_MAP[modelo_seleccionado]
+
+st.sidebar.markdown("---")
+
+# Menú de Navegación
 menu = st.sidebar.radio(
     "Navegación",
     [
@@ -26,33 +49,45 @@ menu = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# MÓDULO 1: PREINSCRIPCIÓN POR ESCUELA (DESGROSE MONUCBA)
+# MÓDULO 1: PREINSCRIPCIÓN POR ESCUELA (ADAPTATIVO)
 # ---------------------------------------------------------
 if menu == "Preinscripción Escuela":
-    st.subheader("Ficha de Inscripción por Escuela - MONUCBA 2026")
+    st.subheader(f"Ficha de Inscripción por Escuela - {modelo_seleccionado}")
     
-    with st.form("form_registro_monucba"):
-        colegio = st.text_input("Nombre de la Institución / Colegio")
-        docente = st.text_input("Docente / Tutor Acompañante")
+    with st.form("form_registro_adaptativo"):
+        colegio = st.text_input("Nombre de la Institución / Colegio / Universidad")
+        docente = st.text_input("Docente / Tutor Acompañante / Representative")
         email = st.text_input("Correo Electrónico de Contacto")
         clave = st.text_input("Creá una Clave Secreta para el Portal", type="password")
         
         st.markdown("---")
-        st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            del_5 = st.number_input("Sin CS ni ECOSOC (5 delegados: AG1, AG3, AG6)", min_value=0, max_value=5, value=0)
-            del_7_ecosoc = st.number_input("Sin CS con ECOSOC (7 delegados: AG1, AG3, AG6, ECOSOC)", min_value=0, max_value=5, value=0)
-            del_9_completa = st.number_input("Con CS y ECOSOC (9 delegados: AG1, AG3, AG6, ECOSOC, CS)", min_value=0, max_value=2, value=0)
-        
-        with col2:
-            del_7_cs = st.number_input("Con CS sin ECOSOC (7 delegados: AG1, AG3, AG6, CS)", min_value=0, max_value=2, value=0)
-            del_davos = st.number_input("Foro de Davos (Unipersonales)", min_value=0, max_value=5, value=0)
-            del_prensa = st.number_input("Comité de Prensa Internacional (3 delegados)", min_value=0, max_value=2, value=0)
+        # LÓGICA DINÁMICA SEGÚN EL MODELO SELECCIONADO
+        if id_modelo_actual == "MONUCBA_2026":
+            st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad (MONUCBA)")
+            col1, col2 = st.columns(2)
+            with col1:
+                del_5 = st.number_input("Sin CS ni ECOSOC (5 delegados: AG1, AG3, AG6)", min_value=0, max_value=5, value=0)
+                del_7_ecosoc = st.number_input("Sin CS con ECOSOC (7 delegados: AG1, AG3, AG6, ECOSOC)", min_value=0, max_value=5, value=0)
+                del_9_completa = st.number_input("Con CS y ECOSOC (9 delegados: AG1, AG3, AG6, ECOSOC, CS)", min_value=0, max_value=2, value=0)
+            with col2:
+                del_7_cs = st.number_input("Con CS sin ECOSOC (7 delegados: AG1, AG3, AG6, CS)", min_value=0, max_value=2, value=0)
+                del_davos = st.number_input("Foro de Davos (Unipersonales)", min_value=0, max_value=5, value=0)
+                del_prensa = st.number_input("Comité de Prensa Internacional (3 delegados)", min_value=0, max_value=2, value=0)
+                
+            tot_alumnos = (del_5 * 5) + (del_7_ecosoc * 7) + (del_9_completa * 9) + (del_7_cs * 7) + (del_davos * 1) + (del_prensa * 3)
+            desglose_str = f"5d:{del_5} | 7d_eco:{del_7_ecosoc} | 9d:{del_9_completa} | 7d_cs:{del_7_cs} | davos:{del_davos} | prensa:{del_prensa}"
+
+        else:
+            # Formulario Genérico/Estándar para otros modelos
+            st.markdown("#### Solicitud de Cupos Generales")
+            cant_delegaciones = st.number_input("Cantidad de Delegaciones / Países Solicitados", min_value=1, max_value=10, value=1)
+            delegados_por_cupo = st.number_input("Integrantes por Delegación", min_value=1, max_value=2, value=2)
             
-        tot_alumnos = (del_5 * 5) + (del_7_ecosoc * 7) + (del_9_completa * 9) + (del_7_cs * 7) + (del_davos * 1) + (del_prensa * 3)
-        st.info(f"📊 **Total de participantes a inscribir en la nómina:** {tot_alumnos} alumnos/delegados.")
+            tot_alumnos = cant_delegaciones * delegados_por_cupo
+            desglose_str = f"delegaciones:{cant_delegaciones} | integrantes_por_del:{delegados_por_cupo}"
+
+        st.info(f"📊 **Total de participantes a inscribir en la nómina:** {tot_alumnos} personas.")
         
         submitted = st.form_submit_button("Enviar Preinscripción")
         
@@ -60,17 +95,18 @@ if menu == "Preinscripción Escuela":
             if not colegio or not docente or not email or not clave:
                 st.error("Por favor completá los datos institucionales obligatorios.")
             elif tot_alumnos == 0:
-                st.warning("Debes seleccionar al menos 1 delegación en alguna modalidad.")
+                st.warning("Debes seleccionar al menos 1 delegación o cupo.")
             else:
                 payload = {
                     "action": "REGISTRAR_DELEGACION",
                     "data": {
+                        "id_modelo": id_modelo_actual,
                         "nombre_colegio": colegio,
                         "docente_cargo": docente,
                         "email_contacto": email,
                         "secret_hash": clave,
                         "cupos_solicitados": tot_alumnos,
-                        "desglose_modalidades": f"5d:{del_5} | 7d_eco:{del_7_ecosoc} | 9d:{del_9_completa} | 7d_cs:{del_7_cs} | davos:{del_davos} | prensa:{del_prensa}"
+                        "desglose_modalidades": desglose_str
                     }
                 }
                 
@@ -78,7 +114,7 @@ if menu == "Preinscripción Escuela":
                     try:
                         res = requests.post(API_URL, json=payload).json()
                         if res.get("status") == "SUCCESS":
-                            st.success(f"¡Preinscripción enviada! Guardá tu ID de Delegación: **{res['data']['id_delegacion']}**")
+                            st.success(f"¡Preinscripción enviada para **{modelo_seleccionado}**! ID asignado: **{res['data']['id_delegacion']}**")
                         else:
                             st.error(f"Error: {res.get('message')}")
                     except Exception as e:
@@ -88,7 +124,7 @@ if menu == "Preinscripción Escuela":
 # MÓDULO 2: CARGA DE COMPROBANTES DE PAGO
 # ---------------------------------------------------------
 elif menu == "Cargar Comprobante":
-    st.subheader("Subida de Comprobantes de Transferencia")
+    st.subheader(f"Subida de Comprobantes - {modelo_seleccionado}")
     
     id_delegacion = st.text_input("Ingresá tu ID de Delegación (Ej: DEL-001)")
     monto = st.number_input("Monto Transferido ($)", min_value=100)
@@ -104,6 +140,7 @@ elif menu == "Cargar Comprobante":
             payload = {
                 "action": "SUBIR_COMPROBANTE",
                 "data": {
+                    "id_modelo": id_modelo_actual,
                     "id_delegacion": id_delegacion,
                     "monto": monto,
                     "file_name": archivo.name,
@@ -126,7 +163,7 @@ elif menu == "Cargar Comprobante":
 # MÓDULO 3: CARGA DE NÓMINA Y FICHAS
 # ---------------------------------------------------------
 elif menu == "Carga de Nómina y Fichas":
-    st.subheader("Carga de Participantes y Documentación Médica/Legal")
+    st.subheader(f"Carga de Participantes y Documentación - {modelo_seleccionado}")
     st.info("Ingresá los datos de cada participante perteneciente a tu delegación.")
     
     with st.form("form_nomina", clear_on_submit=True):
@@ -171,6 +208,7 @@ elif menu == "Carga de Nómina y Fichas":
                 payload = {
                     "action": "GUARDAR_NOMINA",
                     "data": {
+                        "id_modelo": id_modelo_actual,
                         "id_delegacion": id_delegacion,
                         "nombre_completo": nombre_completo,
                         "dni": dni,
@@ -199,7 +237,7 @@ elif menu == "Carga de Nómina y Fichas":
 # MÓDULO 4: PANEL ADMIN / SECRETARIADO
 # ---------------------------------------------------------
 elif menu == "Panel Secretariado (Admin)":
-    st.subheader("Panel de Control y Revisión del Secretariado")
+    st.subheader(f"Panel de Control - {modelo_seleccionado}")
     
     admin_pass = st.text_input("Contraseña de Administrador", type="password")
     
@@ -207,7 +245,7 @@ elif menu == "Panel Secretariado (Admin)":
         tab1, tab2 = st.tabs(["Revisión de Pagos", "Revisión de Fichas/Nóminas"])
         
         with tab1:
-            st.markdown("### Comprobantes de Pago Pendientes")
+            st.markdown(f"### Comprobantes Pendientes ({modelo_seleccionado})")
             if st.button("Actualizar Lista de Pagos"):
                 st.rerun()
                 
@@ -215,10 +253,13 @@ elif menu == "Panel Secretariado (Admin)":
                 res = requests.get(f"{API_URL}?action=GET_PAGOS_PENDIENTES").json()
                 pagos = res.get("data", [])
                 
-                if not pagos:
-                    st.success("No hay pagos pendientes de revisión.")
+                # Filtrar pagos por el modelo seleccionado en el menú lateral
+                pagos_filtrados = [p for p in pagos if p.get("id_modelo") == id_modelo_actual or not p.get("id_modelo")]
+                
+                if not pagos_filtrados:
+                    st.success(f"No hay pagos pendientes para {modelo_seleccionado}.")
                 else:
-                    for pago in pagos:
+                    for pago in pagos_filtrados:
                         with st.expander(f"Pago {pago['id_pago']} - Delegación: {pago['id_delegacion']} - ${pago['monto']}"):
                             col_a, col_b = st.columns([2, 1])
                             with col_a:
