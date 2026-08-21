@@ -8,17 +8,32 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycby8moCFp2NDWnSapd9TaA0OJPERRZf249QwFF9SJuw3QnKmAlc8RCHJdze-o3QTmCXwCA/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbw99vCAavy6ELN2LD7-jDYEa5mt2_gXEMm7a6dySthwNq4yYplspJGRGhbaK-APMrfoqQ/exec"
 
 st.title("🇺🇳 Portal de Inscripción y Carga - Modelos ONU")
 
-CONFIG_MODELOS = {
-    f"MUNEJEMPLO{i}": f"MUNEJEMPLO_{i}" for i in range(1, 11)
-}
+@st.cache_data(ttl=60)
+def cargar_modelos_activos():
+    try:
+        res = requests.get(f"{API_URL}?action=GET_MODELOS_ACTIVOS").json()
+        if res.get("status") == "SUCCESS":
+            modelos = res.get("data", [])
+            return {m["nombre_visible"]: m["id_modelo"] for m in modelos}
+        return {}
+    except Exception:
+        return {}
+
+CONFIG_MODELOS = cargar_modelos_activos()
 
 st.sidebar.markdown("### 🌐 Selección de Evento")
-modelo_seleccionado = st.sidebar.selectbox("Elegí el Modelo a Gestionar:", list(CONFIG_MODELOS.keys()))
-id_modelo_actual = CONFIG_MODELOS[modelo_seleccionado]
+
+if not CONFIG_MODELOS:
+    st.sidebar.warning("⚠️ No hay modelos activos configurados en la planilla.")
+    st.warning("El portal no tiene eventos habilitados en este momento.")
+    st.stop()
+else:
+    modelo_seleccionado = st.sidebar.selectbox("Elegí el Modelo a Gestionar:", list(CONFIG_MODELOS.keys()))
+    id_modelo_actual = CONFIG_MODELOS[modelo_seleccionado]
 
 st.sidebar.markdown("---")
 
@@ -132,7 +147,7 @@ elif menu == "2. Cargar Comprobante":
                     st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
-# MÓDULO 3: CARGA DE NÓMINA DE LA DELEGACIÓN SELECCIONADA
+# MÓDULO 3: CARGA DE NÓMINA POR PAÍS DELEGACIÓN
 # ---------------------------------------------------------
 elif menu == "3. Carga de Nómina y Fichas":
     st.subheader(f"Carga de Integrantes de la Delegación - {modelo_seleccionado}")
