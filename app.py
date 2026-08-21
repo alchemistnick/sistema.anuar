@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbyM7_YhNDZdzKcrrTChJ0hfN_d7nCeQ5WC-y9Uk1VmSGyeKiyqaXxoT3mnJMYTRSqeaDQ/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbwYi1Xajvk633-SEn2v80HpLlxHrJURBMFZSeJoJwApksGkhlibF1ldpK2CoBIcibB6Bw/exec"
 
 st.title("🇺🇳 Portal de Inscripción y Carga - Modelos ONU")
 
@@ -22,6 +22,16 @@ def cargar_modelos_activos():
         return {}
     except Exception:
         return {}
+
+@st.cache_data(ttl=60)
+def cargar_modalidades_modelo(id_modelo):
+    try:
+        res = requests.get(f"{API_URL}?action=GET_MODALIDADES_MODELO&id_modelo={id_modelo}").json()
+        if res.get("status") == "SUCCESS":
+            return res.get("data", [])
+        return []
+    except Exception:
+        return []
 
 CONFIG_MODELOS = cargar_modelos_activos()
 
@@ -47,65 +57,148 @@ menu = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# MÓDULO 1: PREINSCRIPCIÓN
+# MÓDULO 1: PREINSCRIPCIÓN (NUEVA O MODIFICACIÓN)
 # ---------------------------------------------------------
 if menu == "1. Preinscripción Escuela":
-    st.subheader(f"Ficha de Inscripción por Escuela - {modelo_seleccionado}")
+    st.subheader(f"Ficha de Preinscripción por Escuela - {modelo_seleccionado}")
     
-    with st.form("form_registro_unificado"):
-        colegio = st.text_input("Nombre de la Institución / Colegio")
-        docente = st.text_input("Docente / Tutor Acompañante")
-        email = st.text_input("Correo Electrónico de Contacto")
-        clave = st.text_input("Creá una Clave Secreta para el Portal", type="password")
-        
-        st.markdown("---")
-        st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            del_5 = st.number_input("Sin CS ni ECOSOC (5 delegados)", min_value=0, max_value=5, value=0, key=f"{id_modelo_actual}_del5")
-            del_7_eco = st.number_input("Sin CS con ECOSOC (7 delegados)", min_value=0, max_value=5, value=0, key=f"{id_modelo_actual}_del7eco")
-            del_9_comp = st.number_input("Con CS y ECOSOC (9 delegados)", min_value=0, max_value=2, value=0, key=f"{id_modelo_actual}_del9")
-        with col2:
-            del_7_cs = st.number_input("Con CS sin ECOSOC (7 delegados)", min_value=0, max_value=2, value=0, key=f"{id_modelo_actual}_del7cs")
-            del_davos = st.number_input("Foro de Davos (Unipersonales)", min_value=0, max_value=5, value=0, key=f"{id_modelo_actual}_davos")
-            del_prensa = st.number_input("Comité de Prensa (3 delegados)", min_value=0, max_value=2, value=0, key=f"{id_modelo_actual}_prensa")
-            
-        tot_alumnos = (del_5 * 5) + (del_7_eco * 7) + (del_9_comp * 9) + (del_7_cs * 7) + (del_davos * 1) + (del_prensa * 3)
-        desglose_str = f"5d:{del_5} | 7d_eco:{del_7_eco} | 9d:{del_9_comp} | 7d_cs:{del_7_cs} | davos:{del_davos} | prensa:{del_prensa}"
+    tab_nueva, tab_editar = st.tabs(["📝 Nueva Preinscripción", "✏️ Modificar Preinscripción Existente"])
+    
+    modalidades_evento = cargar_modalidades_modelo(id_modelo_actual)
+    
+    # Fallback por si la solapa MODALIDADES_MODELO aún no tiene datos para este modelo
+    if not modalidades_evento:
+        modalidades_evento = [
+            {"clave_modalidad": "del_5", "etiqueta_visible": "Sin CS ni ECOSOC", "delegados_por_unidad": 5, "max_permitido": 5},
+            {"clave_modalidad": "del_7_eco", "etiqueta_visible": "Sin CS con ECOSOC", "delegados_por_unidad": 7, "max_permitido": 5},
+            {"clave_modalidad": "del_9", "etiqueta_visible": "Con CS y ECOSOC", "delegados_por_unidad": 9, "max_permitido": 2},
+            {"clave_modalidad": "del_davos", "etiqueta_visible": "Foro de Davos", "delegados_por_unidad": 1, "max_permitido": 5},
+            {"clave_modalidad": "del_prensa", "etiqueta_visible": "Comité de Prensa", "delegados_por_unidad": 3, "max_permitido": 2}
+        ]
 
-        st.info(f"📊 **Total de participantes a inscribir en la nómina:** {tot_alumnos} personas.")
-        
-        submitted = st.form_submit_button("Enviar Preinscripción")
-        
-        if submitted:
-            if not colegio or not docente or not email or not clave:
-                st.error("Por favor completá los datos institucionales obligatorios.")
-            elif tot_alumnos == 0:
-                st.warning("Debes seleccionar al menos 1 delegación en alguna modalidad.")
-            else:
-                payload = {
-                    "action": "REGISTRAR_DELEGACION",
-                    "data": {
-                        "id_modelo": id_modelo_actual,
-                        "nombre_colegio": colegio,
-                        "docente_cargo": docente,
-                        "email_contacto": email,
-                        "secret_hash": clave,
-                        "cupos_solicitados": tot_alumnos,
-                        "desglose_modalidades": desglose_str
+    # TAB 1: CREAR NUEVA PREINSCRIPCIÓN
+    with tab_nueva:
+        with st.form("form_registro_unificado"):
+            colegio = st.text_input("Nombre de la Institución / Colegio")
+            docente = st.text_input("Docente / Tutor Acompañante")
+            email = st.text_input("Correo Electrónico de Contacto")
+            clave = st.text_input("Creá una Clave Secreta para el Portal", type="password")
+            
+            st.markdown("---")
+            st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad")
+            
+            respuestas_modalidades = {}
+            tot_alumnos = 0
+            
+            cols = st.columns(2)
+            for idx, mod in enumerate(modalidades_evento):
+                col_curr = cols[idx % 2]
+                with col_curr:
+                    lbl = f"{mod['etiqueta_visible']} ({mod['delegados_por_unidad']} delegados/u)"
+                    cant = st.number_input(
+                        lbl, 
+                        min_value=0, 
+                        max_value=int(mod.get('max_permitido', 5)), 
+                        value=0, 
+                        key=f"new_{id_modelo_actual}_{mod['clave_modalidad']}"
+                    )
+                    respuestas_modalidades[mod['clave_modalidad']] = cant
+                    tot_alumnos += cant * int(mod['delegados_por_unidad'])
+                    
+            desglose_str = " | ".join([f"{k}:{v}" for k, v in respuestas_modalidades.items()])
+
+            st.info(f"📊 **Total de participantes a inscribir en la nómina:** {tot_alumnos} personas.")
+            
+            submitted = st.form_submit_button("Enviar Preinscripción")
+            
+            if submitted:
+                if not colegio or not docente or not email or not clave:
+                    st.error("Por favor completá los datos institucionales obligatorios.")
+                elif tot_alumnos == 0:
+                    st.warning("Debes seleccionar al menos 1 delegación en alguna modalidad.")
+                else:
+                    payload = {
+                        "action": "REGISTRAR_DELEGACION",
+                        "data": {
+                            "id_modelo": id_modelo_actual,
+                            "nombre_colegio": colegio,
+                            "docente_cargo": docente,
+                            "email_contacto": email,
+                            "secret_hash": clave,
+                            "cupos_solicitados": tot_alumnos,
+                            "desglose_modalidades": desglose_str
+                        }
                     }
-                }
-                
-                with st.spinner("Registrando preinscripción en el sistema..."):
-                    try:
-                        res = requests.post(API_URL, json=payload).json()
-                        if res.get("status") == "SUCCESS":
-                            st.success(f"¡Preinscripción enviada para **{modelo_seleccionado}**! ID asignado: **{res['data']['id_delegacion']}**")
-                        else:
-                            st.error(f"Error: {res.get('message')}")
-                    except Exception as e:
-                        st.error(f"Error de conexión: {e}")
+                    
+                    with st.spinner("Registrando preinscripción en el sistema..."):
+                        try:
+                            res = requests.post(API_URL, json=payload).json()
+                            if res.get("status") == "SUCCESS":
+                                st.success(f"¡Preinscripción enviada para **{modelo_seleccionado}**! ID asignado: **{res['data']['id_delegacion']}**")
+                            else:
+                                st.error(f"Error: {res.get('message')}")
+                        except Exception as e:
+                            st.error(f"Error de conexión: {e}")
+
+    # TAB 2: MODIFICAR PREINSCRIPCIÓN EXISTENTE
+    with tab_editar:
+        st.markdown("#### Modificar cantidad de delegaciones solicitadas")
+        with st.form("form_editar_preinscripcion"):
+            id_del_edit = st.text_input("Ingresá tu ID de Delegación (Ej: DEL-001)")
+            clave_edit = st.text_input("Ingresá tu Contraseña Secreta", type="password", key="edit_pass")
+            
+            st.markdown("---")
+            st.markdown("#### Nuevas cantidades por Modalidad:")
+            
+            respuestas_edit = {}
+            tot_alumnos_edit = 0
+            
+            cols_edit = st.columns(2)
+            for idx, mod in enumerate(modalidades_evento):
+                col_curr = cols_edit[idx % 2]
+                with col_curr:
+                    lbl = f"{mod['etiqueta_visible']} ({mod['delegados_por_unidad']} delegados/u)"
+                    cant = st.number_input(
+                        lbl, 
+                        min_value=0, 
+                        max_value=int(mod.get('max_permitido', 5)), 
+                        value=0, 
+                        key=f"edit_{id_modelo_actual}_{mod['clave_modalidad']}"
+                    )
+                    respuestas_edit[mod['clave_modalidad']] = cant
+                    tot_alumnos_edit += cant * int(mod['delegados_por_unidad'])
+                    
+            desglose_edit_str = " | ".join([f"{k}:{v}" for k, v in respuestas_edit.items()])
+
+            st.info(f"📊 **Nuevo Total de participantes recalculado:** {tot_alumnos_edit} personas.")
+            
+            submitted_edit = st.form_submit_button("Actualizar Preinscripción")
+            
+            if submitted_edit:
+                if not id_del_edit or not clave_edit:
+                    st.error("Completá tu ID de Delegación y Contraseña.")
+                elif tot_alumnos_edit == 0:
+                    st.warning("La delegación debe tener al menos 1 cupo.")
+                else:
+                    payload = {
+                        "action": "ACTUALIZAR_PREINSCRIPCION",
+                        "data": {
+                            "id_delegacion": id_del_edit,
+                            "secret_hash": clave_edit,
+                            "cupos_solicitados": tot_alumnos_edit,
+                            "desglose_modalidades": desglose_edit_str
+                        }
+                    }
+                    
+                    with st.spinner("Actualizando preinscripción..."):
+                        try:
+                            res = requests.post(API_URL, json=payload).json()
+                            if res.get("status") == "SUCCESS":
+                                st.success("¡Preinscripción actualizada con éxito!")
+                            else:
+                                st.error(f"Error: {res.get('message')}")
+                        except Exception as e:
+                            st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
 # MÓDULO 2: CARGA DE COMPROBANTES DE PAGO
