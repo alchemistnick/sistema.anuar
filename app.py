@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbwZim4YeUITbiOhsKpbKQPSrVqH-IwhoSTLZ5G_u1PhAQ2Z72VzqAL_OZb6nBvOjXC-mA/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbzCVDquLKvY64UMPLtZ6brcuC_1817FHCSvyVbOBVCAGhBA9F0KFiP31OMNMUfwDOHJ7Q/exec"
 
 st.title("🇺🇳 Portal de Inscripción y Carga - Modelos ONU")
 
@@ -57,7 +57,7 @@ menu = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# MÓDULO 1: PREINSCRIPCIÓN (NUEVA O SOLICITUD DE CAMBIO)
+# MÓDULO 1: PREINSCRIPCIÓN
 # ---------------------------------------------------------
 if menu == "1. Preinscripción Escuela":
     st.subheader(f"Ficha de Preinscripción por Escuela - {modelo_seleccionado}")
@@ -74,13 +74,28 @@ if menu == "1. Preinscripción Escuela":
             {"clave_modalidad": "del_prensa", "etiqueta_visible": "Comité de Prensa", "delegados_por_unidad": 3, "max_permitido": 2}
         ]
 
-    # TAB 1: CREAR NUEVA PREINSCRIPCIÓN
+    # TAB 1: NUEVA PREINSCRIPCIÓN
     with tab_nueva:
         with st.form("form_registro_unificado"):
             colegio = st.text_input("Nombre de la Institución / Colegio")
-            docente = st.text_input("Docente / Tutor Acompañante")
-            email = st.text_input("Correo Electrónico de Contacto")
-            clave = st.text_input("Creá una Clave Secreta para el Portal", type="password")
+            
+            col_doc1, col_doc2 = st.columns(2)
+            with col_doc1:
+                docente_nombre = st.text_input("Nombre del Docente / Tutor Responsable")
+            with col_doc2:
+                docente_apellido = st.text_input("Apellido del Docente / Tutor Responsable")
+                
+            col_cont1, col_cont2 = st.columns(2)
+            with col_cont1:
+                email = st.text_input("Correo Electrónico de Contacto")
+            with col_cont2:
+                telefono = st.text_input("Teléfono Celular de Contacto (con Whatsapp)")
+
+            col_extra1, col_extra2 = st.columns(2)
+            with col_extra1:
+                cant_docentes = st.number_input("Cantidad TOTAL de Docentes Acompañantes que asistirán:", min_value=1, max_value=10, value=1)
+            with col_extra2:
+                clave = st.text_input("Creá una Clave Secreta para el Portal", type="password")
             
             st.markdown("---")
             st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad")
@@ -105,12 +120,12 @@ if menu == "1. Preinscripción Escuela":
                     
             desglose_str = " | ".join([f"{k}:{v}" for k, v in respuestas_modalidades.items()])
 
-            st.info(f"📊 **Total de participantes a inscribir en la nómina:** {tot_alumnos} personas.")
+            st.info(f"📊 **Total de estudiantes a inscribir:** {tot_alumnos} personas + {cant_docentes} docente(s) acompañante(s).")
             
             submitted = st.form_submit_button("Enviar Preinscripción")
             
             if submitted:
-                if not colegio or not docente or not email or not clave:
+                if not colegio or not docente_nombre or not docente_apellido or not email or not telefono or not clave:
                     st.error("Por favor completá los datos institucionales obligatorios.")
                 elif tot_alumnos == 0:
                     st.warning("Debes seleccionar al menos 1 delegación en alguna modalidad.")
@@ -120,8 +135,11 @@ if menu == "1. Preinscripción Escuela":
                         "data": {
                             "id_modelo": id_modelo_actual,
                             "nombre_colegio": colegio,
-                            "docente_cargo": docente,
+                            "docente_nombre": docente_nombre,
+                            "docente_apellido": docente_apellido,
                             "email_contacto": email,
+                            "telefono_contacto": telefono,
+                            "docentes_acompanantes": cant_docentes,
                             "secret_hash": clave,
                             "cupos_solicitados": tot_alumnos,
                             "desglose_modalidades": desglose_str
@@ -140,12 +158,12 @@ if menu == "1. Preinscripción Escuela":
 
     # TAB 2: SOLICITAR MODIFICACIÓN AL SECRETARIADO
     with tab_editar:
-        st.markdown("#### Solicitar modificación en la cantidad de delegaciones")
-        st.caption("ℹ️ La solicitud ingresará a la casilla del Secretariado para ser validada y autorizada.")
+        st.markdown("#### Solicitar modificación de cupos o docentes")
         
         with st.form("form_editar_preinscripcion"):
             id_del_edit = st.text_input("Ingresá tu ID de Delegación (Ej: DEL-001)")
             clave_edit = st.text_input("Ingresá tu Contraseña Secreta", type="password", key="edit_pass")
+            cant_docentes_edit = st.number_input("Nueva cantidad total de docentes acompañantes:", min_value=1, max_value=10, value=1, key="edit_doc_cnt")
             
             st.markdown("---")
             st.markdown("#### Propuesta de Nuevas Cantidades por Modalidad:")
@@ -170,7 +188,7 @@ if menu == "1. Preinscripción Escuela":
                     
             desglose_edit_str = " | ".join([f"{k}:{v}" for k, v in respuestas_edit.items()])
 
-            st.info(f"📊 **Nuevo Total a solicitar:** {tot_alumnos_edit} personas.")
+            st.info(f"📊 **Nuevo Total a solicitar:** {tot_alumnos_edit} estudiantes + {cant_docentes_edit} docente(s).")
             
             submitted_edit = st.form_submit_button("📩 Enviar Solicitud de Cambio al Secretariado")
             
@@ -186,6 +204,7 @@ if menu == "1. Preinscripción Escuela":
                             "id_delegacion": id_del_edit,
                             "secret_hash": clave_edit,
                             "cupos_solicitados": tot_alumnos_edit,
+                            "docentes_acompanantes": cant_docentes_edit,
                             "desglose_modalidades": desglose_edit_str
                         }
                     }
@@ -240,7 +259,7 @@ elif menu == "2. Cargar Comprobante":
                     st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
-# MÓDULO 3: CARGA DE NÓMINA POR PAÍS DELEGACIÓN
+# MÓDULO 3: CARGA DE NÓMINA CON CAMPOS NOMBRE Y APELLIDO SEPARADOS
 # ---------------------------------------------------------
 elif menu == "3. Carga de Nómina y Fichas":
     st.subheader(f"Carga de Integrantes de la Delegación - {modelo_seleccionado}")
@@ -312,7 +331,8 @@ elif menu == "3. Carga de Nómina y Fichas":
                             
                             col1, col2 = st.columns(2)
                             with col1:
-                                nom = st.text_input("Nombre y Apellido del Estudiante", key=f"nom_{id_delegacion_sel}_{pais_elegido}_{idx}")
+                                nom = st.text_input("Nombre(s)", key=f"nom_{id_delegacion_sel}_{pais_elegido}_{idx}")
+                                ape = st.text_input("Apellido(s)", key=f"ape_{id_delegacion_sel}_{pais_elegido}_{idx}")
                                 dni = st.text_input("DNI / Documento", key=f"dni_{id_delegacion_sel}_{pais_elegido}_{idx}")
                             
                             with col2:
@@ -331,6 +351,7 @@ elif menu == "3. Carga de Nómina y Fichas":
                                 "pais": pais_elegido,
                                 "comision": comision_nombre,
                                 "nom": nom,
+                                "ape": ape,
                                 "dni": dni,
                                 "ale": ale,
                                 "fic": fic,
@@ -342,8 +363,8 @@ elif menu == "3. Carga de Nómina y Fichas":
                     if btn_guardar_pais:
                         errores = []
                         for d in datos_a_enviar:
-                            if not d["nom"] or not d["dni"]:
-                                errores.append(f"Faltan datos obligatorios en Delegado #{d['idx']} ({d['comision']}).")
+                            if not d["nom"] or not d["ape"] or not d["dni"]:
+                                errores.append(f"Faltan Nombre, Apellido o DNI en Delegado #{d['idx']} ({d['comision']}).")
 
                         if errores:
                             for err in errores:
@@ -369,7 +390,8 @@ elif menu == "3. Carga de Nómina y Fichas":
                                         "data": {
                                             "id_modelo": id_modelo_actual,
                                             "id_delegacion": id_delegacion_sel,
-                                            "nombre_completo": d["nom"],
+                                            "nombre": d["nom"],
+                                            "apellido": d["ape"],
                                             "dni": d["dni"],
                                             "rol_mnu": f"DELEGADO ({d['pais']} - {d['comision']})",
                                             "alergias_medicas": d["ale"],
