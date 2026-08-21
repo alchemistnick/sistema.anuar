@@ -1,318 +1,305 @@
-/**
- * SISTEMA INTEGRAL MONUCBA / MNU 2026 - BACKEND API
- * URL Web App: "https://script.google.com/macros/s/AKfycbyM7_YhNDZdzKcrrTChJ0hfN_d7nCeQ5WC-y9Uk1VmSGyeKiyqaXxoT3mnJMYTRSqeaDQ/exec"
- */
+import streamlit as st
+import requests
+import base64
 
-function doGet(e) {
-  try {
-    const action = e.parameter.action;
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+st.set_page_config(
+    page_title="Gestión MNU - Portal Escuelas",
+    page_icon="🇺🇳",
+    layout="wide"
+)
+
+API_URL = "https://script.google.com/macros/s/AKfycbyM7_YhNDZdzKcrrTChJ0hfN_d7nCeQ5WC-y9Uk1VmSGyeKiyqaXxoT3mnJMYTRSqeaDQ/exec"
+
+st.title("🇺🇳 Portal de Inscripción y Carga - Modelos ONU")
+
+@st.cache_data(ttl=60)
+def cargar_modelos_activos():
+    try:
+        res = requests.get(f"{API_URL}?action=GET_MODELOS_ACTIVOS").json()
+        if res.get("status") == "SUCCESS":
+            modelos = res.get("data", [])
+            return {m["nombre_visible"]: m["id_modelo"] for m in modelos}
+        return {}
+    except Exception:
+        return {}
+
+CONFIG_MODELOS = cargar_modelos_activos()
+
+st.sidebar.markdown("### 🌐 Selección de Evento")
+
+if not CONFIG_MODELOS:
+    st.sidebar.warning("⚠️ No hay modelos activos configurados en la planilla.")
+    st.warning("El portal no tiene eventos habilitados en este momento.")
+    st.stop()
+else:
+    modelo_seleccionado = st.sidebar.selectbox("Elegí el Modelo a Gestionar:", list(CONFIG_MODELOS.keys()))
+    id_modelo_actual = CONFIG_MODELOS[modelo_seleccionado]
+
+st.sidebar.markdown("---")
+
+menu = st.sidebar.radio(
+    "Navegación",
+    [
+        "1. Preinscripción Escuela", 
+        "2. Cargar Comprobante", 
+        "3. Carga de Nómina y Fichas"
+    ]
+)
+
+# ---------------------------------------------------------
+# MÓDULO 1: PREINSCRIPCIÓN
+# ---------------------------------------------------------
+if menu == "1. Preinscripción Escuela":
+    st.subheader(f"Ficha de Inscripción por Escuela - {modelo_seleccionado}")
     
-    if (action === "PING") {
-      return responderJSON({ status: "SUCCESS", message: "API activa y lista" });
-    }
-
-    if (action === "GET_MODELOS_ACTIVOS") {
-      const sheet = ss.getSheetByName("PARAMETROS_MODELOS");
-      if (!sheet) {
-        return responderJSON({ status: "ERROR", message: "Falta la solapa PARAMETROS_MODELOS" });
-      }
-      const data = obtenerDatosTabla(sheet);
-      const activos = data.filter(m => String(m.activo).toUpperCase() === "TRUE");
-      return responderJSON({ status: "SUCCESS", data: activos });
-    }
-    
-    if (action === "GET_ORGANOS") {
-      const idModelo = e.parameter.id_modelo;
-      const sheet = ss.getSheetByName("ORGANOS");
-      const data = obtenerDatosTabla(sheet);
-      const filtrados = idModelo ? data.filter(row => row.id_modelo === idModelo) : data;
-      return responderJSON({ status: "SUCCESS", data: filtrados });
-    }
-
-    if (action === "GET_PAISES_MATRIZ") {
-      const idModelo = e.parameter.id_modelo;
-      const sheet = ss.getSheetByName("ORGANOS");
-      const data = obtenerDatosTabla(sheet);
-      const filtrados = idModelo ? data.filter(row => row.id_modelo === idModelo) : data;
-      const paisesUnicos = [...new Set(filtrados.map(item => item.pais))].filter(Boolean);
-      return responderJSON({ status: "SUCCESS", data: paisesUnicos });
-    }
-
-    if (action === "GET_PAGOS_PENDIENTES") {
-      const sheet = ss.getSheetByName("PAGOS");
-      const data = obtenerDatosTabla(sheet);
-      const pendientes = data.filter(row => row.estado_pago === "PENDIENTE");
-      return responderJSON({ status: "SUCCESS", data: pendientes });
-    }
-
-    if (action === "GET_DELEGACIONES_APROBADAS") {
-      const idModelo = e.parameter.id_modelo;
-      const sheetPagos = ss.getSheetByName("PAGOS");
-      const pagos = obtenerDatosTabla(sheetPagos);
-      const sheetDel = ss.getSheetByName("DELEGACIONES");
-      const delegaciones = obtenerDatosTabla(sheetDel);
-
-      const pagosAprobados = pagos.filter(p => 
-        p.estado_pago === "APROBADO" && 
-        (!idModelo || p.id_modelo === idModelo)
-      );
-      
-      const idsAprobados = pagosAprobados.map(p => p.id_delegacion);
-      const delAprobadas = delegaciones.filter(d => idsAprobados.includes(d.id_delegacion));
-
-      return responderJSON({ status: "SUCCESS", data: delAprobadas });
-    }
-
-    if (action === "GET_ASIGNACIONES_DELEGACION") {
-      const idDelegacion = e.parameter.id_delegacion;
-      const sheetAsig = ss.getSheetByName("ASIGNACIONES");
-      const asignaciones = obtenerDatosTabla(sheetAsig);
-      const delAsignaciones = asignaciones.filter(a => a.id_delegacion_asignada === idDelegacion);
-
-      return responderJSON({ status: "SUCCESS", data: delAsignaciones });
-    }
-
-    if (action === "GET_TODAS_NOMINAS") {
-      const idModelo = e.parameter.id_modelo;
-      const sheetNom = ss.getSheetByName("NOMINAS");
-      const nominas = obtenerDatosTabla(sheetNom);
-      const filtradas = idModelo ? nominas.filter(n => n.id_modelo === idModelo) : nominas;
-      
-      return responderJSON({ status: "SUCCESS", data: filtradas });
-    }
-
-    return responderJSON({ status: "ERROR", message: "Acción GET no válida" });
-    
-  } catch (err) {
-    return responderJSON({ status: "ERROR", message: err.toString() });
-  }
-}
-
-function doPost(e) {
-  const lock = LockService.getScriptLock();
-  
-  if (lock.tryLock(10000)) {
-    try {
-      const payload = JSON.parse(e.postData.contents);
-      const action = payload.action;
-      const ss = SpreadsheetApp.getActiveSpreadsheet();
-      
-      if (action === "REGISTRAR_DELEGACION") {
-        const res = registrarDelegacion(ss, payload.data);
-        registrarAuditoria(ss, payload.usuario || "SISTEMA", "DELEGACION", "REGISTRAR", res.id_delegacion, "OK");
-        return responderJSON({ status: "SUCCESS", data: res });
-      }
-      
-      if (action === "SUBIR_COMPROBANTE") {
-        const res = guardarComprobanteEnDrive(ss, payload.data);
-        registrarAuditoria(ss, payload.data.id_delegacion, "DELEGACION", "SUBIR_PAGO", res.id_pago, "OK");
-        return responderJSON({ status: "SUCCESS", data: res });
-      }
-
-      if (action === "GUARDAR_NOMINA") {
-        const res = guardarNominaYDocumentos(ss, payload.data);
-        registrarAuditoria(ss, payload.data.id_delegacion, "DELEGACION", "CARGA_NOMINA", res.id_delegado, "OK");
-        return responderJSON({ status: "SUCCESS", data: res });
-      }
-
-      if (action === "CAMBIAR_ESTADO_PAGO") {
-        const sheet = ss.getSheetByName("PAGOS");
-        const rows = sheet.getDataRange().getValues();
-        for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0] === payload.data.id_pago) {
-            sheet.getRange(i + 1, 6).setValue(payload.data.nuevo_estado);
-            sheet.getRange(i + 1, 8).setValue(payload.usuario || "ADMIN");
-            break;
-          }
-        }
-        registrarAuditoria(ss, payload.usuario || "ADMIN", "ADMIN", "CAMBIAR_ESTADO_PAGO", payload.data.id_pago, payload.data.nuevo_estado);
-        return responderJSON({ status: "SUCCESS" });
-      }
-
-      if (action === "ASIGNAR_PAIS_AUTOMATICO_DESDE_MATRIZ") {
-        const sheetOrganos = ss.getSheetByName("ORGANOS");
-        const organosMatriz = obtenerDatosTabla(sheetOrganos);
-        const idModelo = payload.data.id_modelo;
-        const idDelegacion = payload.data.id_delegacion;
-        const paisSorteado = payload.data.pais;
+    with st.form("form_registro_unificado"):
+        colegio = st.text_input("Nombre de la Institución / Colegio")
+        docente = st.text_input("Docente / Tutor Acompañante")
+        email = st.text_input("Correo Electrónico de Contacto")
+        clave = st.text_input("Creá una Clave Secreta para el Portal", type="password")
         
-        const configuracionPais = organosMatriz.filter(o => 
-          String(o.id_modelo).trim() === String(idModelo).trim() && 
-          String(o.pais).trim().toLowerCase() === String(paisSorteado).trim().toLowerCase()
-        );
+        st.markdown("---")
+        st.markdown("#### Seleccioná la cantidad de Delegaciones por Modalidad")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            del_5 = st.number_input("Sin CS ni ECOSOC (5 delegados)", min_value=0, max_value=5, value=0, key=f"{id_modelo_actual}_del5")
+            del_7_eco = st.number_input("Sin CS con ECOSOC (7 delegados)", min_value=0, max_value=5, value=0, key=f"{id_modelo_actual}_del7eco")
+            del_9_comp = st.number_input("Con CS y ECOSOC (9 delegados)", min_value=0, max_value=2, value=0, key=f"{id_modelo_actual}_del9")
+        with col2:
+            del_7_cs = st.number_input("Con CS sin ECOSOC (7 delegados)", min_value=0, max_value=2, value=0, key=f"{id_modelo_actual}_del7cs")
+            del_davos = st.number_input("Foro de Davos (Unipersonales)", min_value=0, max_value=5, value=0, key=f"{id_modelo_actual}_davos")
+            del_prensa = st.number_input("Comité de Prensa (3 delegados)", min_value=0, max_value=2, value=0, key=f"{id_modelo_actual}_prensa")
+            
+        tot_alumnos = (del_5 * 5) + (del_7_eco * 7) + (del_9_comp * 9) + (del_7_cs * 7) + (del_davos * 1) + (del_prensa * 3)
+        desglose_str = f"5d:{del_5} | 7d_eco:{del_7_eco} | 9d:{del_9_comp} | 7d_cs:{del_7_cs} | davos:{del_davos} | prensa:{del_prensa}"
 
-        if (configuracionPais.length === 0) {
-          return responderJSON({ status: "ERROR", message: `El país '${paisSorteado}' no está configurado en la solapa ORGANOS para este modelo.` });
-        }
+        st.info(f"📊 **Total de participantes a inscribir en la nómina:** {tot_alumnos} personas.")
+        
+        submitted = st.form_submit_button("Enviar Preinscripción")
+        
+        if submitted:
+            if not colegio or not docente or not email or not clave:
+                st.error("Por favor completá los datos institucionales obligatorios.")
+            elif tot_alumnos == 0:
+                st.warning("Debes seleccionar al menos 1 delegación en alguna modalidad.")
+            else:
+                payload = {
+                    "action": "REGISTRAR_DELEGACION",
+                    "data": {
+                        "id_modelo": id_modelo_actual,
+                        "nombre_colegio": colegio,
+                        "docente_cargo": docente,
+                        "email_contacto": email,
+                        "secret_hash": clave,
+                        "cupos_solicitados": tot_alumnos,
+                        "desglose_modalidades": desglose_str
+                    }
+                }
+                
+                with st.spinner("Registrando preinscripción en el sistema..."):
+                    try:
+                        res = requests.post(API_URL, json=payload).json()
+                        if res.get("status") == "SUCCESS":
+                            st.success(f"¡Preinscripción enviada para **{modelo_seleccionado}**! ID asignado: **{res['data']['id_delegacion']}**")
+                        else:
+                            st.error(f"Error: {res.get('message')}")
+                    except Exception as e:
+                        st.error(f"Error de conexión: {e}")
 
-        const sheetAsig = ss.getSheetByName("ASIGNACIONES");
-        let agregados = 0;
+# ---------------------------------------------------------
+# MÓDULO 2: CARGA DE COMPROBANTES DE PAGO
+# ---------------------------------------------------------
+elif menu == "2. Cargar Comprobante":
+    st.subheader(f"Subida de Comprobantes - {modelo_seleccionado}")
+    
+    id_delegacion = st.text_input("Ingresá tu ID de Delegación (Ej: DEL-001)")
+    monto = st.number_input("Monto Transferido ($)", min_value=100)
+    archivo = st.file_uploader("Adjuntá el comprobante (JPG, PNG o PDF)", type=["jpg", "png", "pdf"])
+    
+    if st.button("Subir Comprobante"):
+        if not id_delegacion or not archivo:
+            st.warning("Completá tu ID y adjuntá el archivo.")
+        else:
+            bytes_file = archivo.read()
+            base64_file = base64.b64encode(bytes_file).decode('utf-8')
+            
+            payload = {
+                "action": "SUBIR_COMPROBANTE",
+                "data": {
+                    "id_modelo": id_modelo_actual,
+                    "id_delegacion": id_delegacion,
+                    "monto": monto,
+                    "file_name": archivo.name,
+                    "mime_type": archivo.type,
+                    "base64_file": base64_file
+                }
+            }
+            
+            with st.spinner("Subiendo archivo a Google Drive..."):
+                try:
+                    res = requests.post(API_URL, json=payload).json()
+                    if res.get("status") == "SUCCESS":
+                        st.success("Comprobante subido correctamente. En revisión por el Secretariado.")
+                    else:
+                        st.error(f"Error al subir: {res.get('message')}")
+                except Exception as e:
+                    st.error(f"Error de conexión: {e}")
 
-        configuracionPais.forEach(item => {
-          const cantidadCupos = parseInt(item.integrantes_totales) || 1;
-          const organoNombre = item.organo_comite;
+# ---------------------------------------------------------
+# MÓDULO 3: CARGA DE NÓMINA POR PAÍS DELEGACIÓN
+# ---------------------------------------------------------
+elif menu == "3. Carga de Nómina y Fichas":
+    st.subheader(f"Carga de Integrantes de la Delegación - {modelo_seleccionado}")
+    
+    with st.spinner("Cargando escuelas habilitadas..."):
+        try:
+            res_del = requests.get(f"{API_URL}?action=GET_DELEGACIONES_APROBADAS&id_modelo={id_modelo_actual}").json()
+            delegaciones_aprobadas = res_del.get("data", [])
+        except Exception as e:
+            delegaciones_aprobadas = []
+            st.error(f"Error al consultar el servidor: {e}")
 
-          for (let i = 1; i <= cantidadCupos; i++) {
-            const idAsig = "ASIG-" + String(sheetAsig.getLastRow()).padStart(3, '0');
-            const etiquetaComision = cantidadCupos > 1 ? `${organoNombre} (Banca ${i})` : organoNombre;
+    if not delegaciones_aprobadas:
+        st.warning("⚠️ No hay escuelas con pago **APROBADO** para este modelo aún.")
+    else:
+        opciones_del = {f"{d['id_delegacion']} - {d['nombre_colegio']}": d for d in delegaciones_aprobadas}
+        del_seleccionada_label = st.selectbox("Seleccioná tu Escuela / Institución Aprobada:", list(opciones_del.keys()))
+        delegacion_actual = opciones_del[del_seleccionada_label]
+        id_delegacion_sel = delegacion_actual['id_delegacion']
 
-            sheetAsig.appendRow([
-              idAsig,
-              etiquetaComision,
-              item.pais,
-              idDelegacion,
-              idModelo
-            ]);
-            agregados++;
-          }
-        });
+        st.markdown("---")
+        st.markdown("#### 🔒 Autenticación del Docente")
+        
+        col_auth1, col_auth2 = st.columns(2)
+        with col_auth1:
+            email_ingresado = st.text_input("Correo Electrónico de Contacto:", key=f"auth_email_{id_delegacion_sel}")
+        with col_auth2:
+            clave_ingresada = st.text_input("Contraseña Secreta:", type="password", key=f"auth_pass_{id_delegacion_sel}")
 
-        registrarAuditoria(ss, payload.usuario || "ADMIN", "ADMIN", "ASIGNAR_PAIS_MATRIZ", idDelegacion, `PAIS: ${paisSorteado} (${agregados} cupos)`);
-        return responderJSON({ status: "SUCCESS", cupos_agregados: agregados });
-      }
+        if email_ingresado and clave_ingresada:
+            email_valido = email_ingresado.strip().lower() == str(delegacion_actual.get('email_contacto', '')).strip().lower()
+            clave_valida = clave_ingresada == str(delegacion_actual.get('secret_hash', ''))
 
-      return responderJSON({ status: "ERROR", message: "Acción POST no reconocida" });
+            if email_valido and clave_valida:
+                nombre_docente = delegacion_actual.get('docente_cargo', 'Docente/Tutor')
+                nombre_colegio = delegacion_actual.get('nombre_colegio', '')
+                
+                st.success(f"👋 **¡Hola, {nombre_docente}!** Bienvenido/a al portal de **{nombre_colegio}**.")
+                
+                try:
+                    res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_delegacion_sel}").json()
+                    asignaciones = res_asig.get("data", [])
+                except Exception as e:
+                    asignaciones = []
+                    st.error(f"Error al consultar asignaciones: {e}")
 
-    } catch (err) {
-      return responderJSON({ status: "ERROR", message: err.toString() });
-    } finally {
-      lock.releaseLock();
-    }
-  } else {
-    return responderJSON({ status: "TIMEOUT", message: "Servidor ocupado. Intente nuevamente." });
-  }
-}
+                if not asignaciones:
+                    st.info("ℹ️ Tu pago está APROBADO, pero el Secretariado todavía no le asignó países a tu escuela.")
+                else:
+                    paises_dict = {}
+                    for a in asignaciones:
+                        p = a.get('pais', 'Delegación Sin País')
+                        if p not in paises_dict:
+                            paises_dict[p] = []
+                        paises_dict[p].append(a)
 
-// --- FUNCIONES AUXILIARES ---
+                    pais_elegido = st.selectbox("🌍 Seleccioná el País / Delegación a cargar:", list(paises_dict.keys()))
+                    cargos_pais = paises_dict[pais_elegido]
+                    cant_delegados_pais = len(cargos_pais)
 
-function registrarDelegacion(ss, data) {
-  const sheet = ss.getSheetByName("DELEGACIONES");
-  const lastRow = sheet.getLastRow();
-  const idDelegacion = "DEL-" + String(lastRow).padStart(3, '0');
-  
-  sheet.appendRow([
-    idDelegacion,
-    data.nombre_colegio,
-    data.docente_cargo,
-    data.email_contacto,
-    data.secret_hash,
-    data.cupos_solicitados,
-    "REGISTRADO",
-    data.desglose_modalidades || "",
-    data.id_modelo || "GENERAL"
-  ]);
-  
-  return { id_delegacion: idDelegacion };
-}
+                    st.markdown(f"📋 **Cargando Integrantes para {pais_elegido} ({cant_delegados_pais} delegados requeridos)**")
 
-function guardarComprobanteEnDrive(ss, data) {
-  const sheetParams = ss.getSheetByName("PARAMETROS");
-  const params = obtenerDatosTabla(sheetParams);
-  const paramFolder = params.find(p => p.clave === "ID_CARPETA_DRIVE_COMPROBANTES");
-  
-  if (!paramFolder || !paramFolder.valor) {
-    throw new Error("Falta ID_CARPETA_DRIVE_COMPROBANTES en la solapa PARAMETROS.");
-  }
+                    with st.form(key=f"form_pais_{id_delegacion_sel}_{pais_elegido}"):
+                        datos_a_enviar = []
+                        
+                        for idx, cargo in enumerate(cargos_pais, 1):
+                            comision_nombre = cargo.get('organo', f'Comisión #{idx}')
+                            st.markdown(f"### 👤 Delegado #{idx}: {pais_elegido} - {comision_nombre}")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                nom = st.text_input("Nombre y Apellido del Estudiante", key=f"nom_{id_delegacion_sel}_{pais_elegido}_{idx}")
+                                dni = st.text_input("DNI / Documento", key=f"dni_{id_delegacion_sel}_{pais_elegido}_{idx}")
+                            
+                            with col2:
+                                ale = st.text_area("Alergias / Dieta Especial / Cuidados Médicos", value="Ninguna", key=f"ale_{id_delegacion_sel}_{pais_elegido}_{idx}")
+                            
+                            col_doc1, col_doc2 = st.columns(2)
+                            with col_doc1:
+                                fic = st.file_uploader("Ficha Médica (PDF/Foto)", type=["pdf", "jpg", "png"], key=f"fic_{id_delegacion_sel}_{pais_elegido}_{idx}")
+                            with col_doc2:
+                                aut = st.file_uploader("Autorización de Imagen (PDF/Foto)", type=["pdf", "jpg", "png"], key=f"aut_{id_delegacion_sel}_{pais_elegido}_{idx}")
+                            
+                            st.markdown("---")
+                            
+                            datos_a_enviar.append({
+                                "idx": idx,
+                                "pais": pais_elegido,
+                                "comision": comision_nombre,
+                                "nom": nom,
+                                "dni": dni,
+                                "ale": ale,
+                                "fic": fic,
+                                "aut": aut
+                            })
 
-  const folder = DriveApp.getFolderById(paramFolder.valor);
-  const blob = Utilities.newBlob(Utilities.base64Decode(data.base64_file), data.mime_type, data.file_name);
-  const file = folder.createFile(blob);
-  
-  const sheetPagos = ss.getSheetByName("PAGOS");
-  const idPago = "PAG-" + String(sheetPagos.getLastRow()).padStart(3, '0');
-  
-  sheetPagos.appendRow([
-    idPago,
-    data.id_delegacion,
-    data.monto,
-    file.getId(),
-    file.getUrl(),
-    "PENDIENTE",
-    new Date().toISOString(),
-    "-",
-    data.id_modelo || "GENERAL"
-  ]);
-  
-  return { id_pago: idPago, file_url: file.getUrl() };
-}
+                        btn_guardar_pais = st.form_submit_button(f"🚀 GUARDAR TODOS LOS DELEGADOS DE {pais_elegido.upper()}")
 
-function guardarNominaYDocumentos(ss, data) {
-  const sheetParams = ss.getSheetByName("PARAMETROS");
-  const params = obtenerDatosTabla(sheetParams);
-  const paramFolder = params.find(p => p.clave === "ID_CARPETA_DRIVE_FICHAS");
-  
-  let folderIdFicha = paramFolder ? paramFolder.valor : "";
-  if (!folderIdFicha) {
-    throw new Error("Falta ID_CARPETA_DRIVE_FICHAS en la solapa PARAMETROS.");
-  }
+                    if btn_guardar_pais:
+                        errores = []
+                        for d in datos_a_enviar:
+                            if not d["nom"] or not d["dni"]:
+                                errores.append(f"Faltan datos obligatorios en Delegado #{d['idx']} ({d['comision']}).")
 
-  const folder = DriveApp.getFolderById(folderIdFicha);
+                        if errores:
+                            for err in errores:
+                                st.error(err)
+                        else:
+                            con_exito = 0
+                            with st.spinner(f"Subiendo fichas y guardando delegación de {pais_elegido}..."):
+                                for d in datos_a_enviar:
+                                    b64_ficha, mime_ficha, ext_ficha = "", "", ""
+                                    if d["fic"]:
+                                        b64_ficha = base64.b64encode(d["fic"].read()).decode('utf-8')
+                                        mime_ficha = d["fic"].type
+                                        ext_ficha = d["fic"].name.split('.')[-1]
 
-  let fichaId = "-";
-  if (data.base64_ficha) {
-    const blob = Utilities.newBlob(
-      Utilities.base64Decode(data.base64_ficha), 
-      data.mime_ficha, 
-      `FICHA_${data.id_delegacion}_${data.dni}.${data.ext_ficha}`
-    );
-    fichaId = folder.createFile(blob).getId();
-  }
+                                    b64_aut, mime_aut, ext_aut = "", "", ""
+                                    if d["aut"]:
+                                        b64_aut = base64.b64encode(d["aut"].read()).decode('utf-8')
+                                        mime_aut = d["aut"].type
+                                        ext_aut = d["aut"].name.split('.')[-1]
 
-  let autorizacionId = "-";
-  if (data.base64_autorizacion) {
-    const blob = Utilities.newBlob(
-      Utilities.base64Decode(data.base64_autorizacion), 
-      data.mime_autorizacion, 
-      `AUT_${data.id_delegacion}_${data.dni}.${data.ext_autorizacion}`
-    );
-    autorizacionId = folder.createFile(blob).getId();
-  }
+                                    payload = {
+                                        "action": "GUARDAR_NOMINA",
+                                        "data": {
+                                            "id_modelo": id_modelo_actual,
+                                            "id_delegacion": id_delegacion_sel,
+                                            "nombre_completo": d["nom"],
+                                            "dni": d["dni"],
+                                            "rol_mnu": f"DELEGADO ({d['pais']} - {d['comision']})",
+                                            "alergias_medicas": d["ale"],
+                                            "base64_ficha": b64_ficha,
+                                            "mime_ficha": mime_ficha,
+                                            "ext_ficha": ext_ficha,
+                                            "base64_autorizacion": b64_aut,
+                                            "mime_autorizacion": mime_aut,
+                                            "ext_autorizacion": ext_aut
+                                        }
+                                    }
 
-  const sheetNominas = ss.getSheetByName("NOMINAS");
-  const idDelegado = `${data.id_delegacion}-${String(sheetNominas.getLastRow()).padStart(2, '0')}`;
-  
-  sheetNominas.appendRow([
-    idDelegado,
-    data.id_delegacion,
-    data.nombre_completo,
-    data.dni,
-    data.rol_mnu,
-    data.alergias_medicas || "Ninguna",
-    fichaId,
-    autorizacionId,
-    "PENDIENTE",
-    false,
-    data.id_modelo || "GENERAL"
-  ]);
+                                    try:
+                                        res = requests.post(API_URL, json=payload).json()
+                                        if res.get("status") == "SUCCESS":
+                                            con_exito += 1
+                                    except Exception:
+                                        pass
 
-  return { id_delegado: idDelegado };
-}
-
-function registrarAuditoria(ss, usuarioId, rol, accion, idRegistro, resultado) {
-  const sheet = ss.getSheetByName("AUDITORIA");
-  sheet.appendRow([
-    new Date().toISOString(),
-    usuarioId,
-    rol,
-    accion,
-    idRegistro,
-    resultado
-  ]);
-}
-
-function obtenerDatosTabla(sheet) {
-  const rows = sheet.getDataRange().getValues();
-  if (rows.length < 2) return [];
-  const headers = rows[0];
-  return rows.slice(1).map(row => {
-    let obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i]; });
-    return obj;
-  });
-}
-
-function responderJSON(data) {
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+                            if con_exito > 0:
+                                st.balloons()
+                                st.success(f"🎉 ¡Se guardó exitosamente la delegación completa de **{pais_elegido}** ({con_exito} estudiantes)!")
+            else:
+                st.error("❌ El correo o la contraseña ingresados son incorrectos.")
+        else:
+            st.info("👈 Por favor ingresá las credenciales para acceder a la carga de la delegación.")
