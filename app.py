@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbzCVDquLKvY64UMPLtZ6brcuC_1817FHCSvyVbOBVCAGhBA9F0KFiP31OMNMUfwDOHJ7Q/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbz0zBX3gXipKIXKAb5ZNHfQMy1YVYJrXVAf51IydmmDIdPM-VSMa91_HSmBdvsGL4Q4yw/exec"
 
 st.title("🇺🇳 Portal de Inscripción y Carga - Modelos ONU")
 
