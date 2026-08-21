@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbwm4txmgLGsDQTbm_TddfzlX_mc94FK-YEOFyM5m1Xg26Ox71dgJzQ-yKOSk47-t8gqMQ/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbyM7_YhNDZdzKcrrTChJ0hfN_d7nCeQ5WC-y9Uk1VmSGyeKiyqaXxoT3mnJMYTRSqeaDQ/exec"
 
 st.title("🇺🇳 Portal de Inscripción y Carga - Modelos ONU")
 
@@ -57,16 +57,14 @@ menu = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# MÓDULO 1: PREINSCRIPCIÓN (NUEVA O MODIFICACIÓN)
+# MÓDULO 1: PREINSCRIPCIÓN (NUEVA O SOLICITUD DE CAMBIO)
 # ---------------------------------------------------------
 if menu == "1. Preinscripción Escuela":
     st.subheader(f"Ficha de Preinscripción por Escuela - {modelo_seleccionado}")
     
-    tab_nueva, tab_editar = st.tabs(["📝 Nueva Preinscripción", "✏️ Modificar Preinscripción Existente"])
+    tab_nueva, tab_editar = st.tabs(["📝 Nueva Preinscripción", "✏️ Solicitar Cambio de Cupos"])
     
     modalidades_evento = cargar_modalidades_modelo(id_modelo_actual)
-    
-    # Fallback por si la solapa MODALIDADES_MODELO aún no tiene datos para este modelo
     if not modalidades_evento:
         modalidades_evento = [
             {"clave_modalidad": "del_5", "etiqueta_visible": "Sin CS ni ECOSOC", "delegados_por_unidad": 5, "max_permitido": 5},
@@ -140,15 +138,17 @@ if menu == "1. Preinscripción Escuela":
                         except Exception as e:
                             st.error(f"Error de conexión: {e}")
 
-    # TAB 2: MODIFICAR PREINSCRIPCIÓN EXISTENTE
+    # TAB 2: SOLICITAR MODIFICACIÓN AL SECRETARIADO
     with tab_editar:
-        st.markdown("#### Modificar cantidad de delegaciones solicitadas")
+        st.markdown("#### Solicitar modificación en la cantidad de delegaciones")
+        st.caption("ℹ️ La solicitud ingresará a la casilla del Secretariado para ser validada y autorizada.")
+        
         with st.form("form_editar_preinscripcion"):
             id_del_edit = st.text_input("Ingresá tu ID de Delegación (Ej: DEL-001)")
             clave_edit = st.text_input("Ingresá tu Contraseña Secreta", type="password", key="edit_pass")
             
             st.markdown("---")
-            st.markdown("#### Nuevas cantidades por Modalidad:")
+            st.markdown("#### Propuesta de Nuevas Cantidades por Modalidad:")
             
             respuestas_edit = {}
             tot_alumnos_edit = 0
@@ -170,18 +170,18 @@ if menu == "1. Preinscripción Escuela":
                     
             desglose_edit_str = " | ".join([f"{k}:{v}" for k, v in respuestas_edit.items()])
 
-            st.info(f"📊 **Nuevo Total de participantes recalculado:** {tot_alumnos_edit} personas.")
+            st.info(f"📊 **Nuevo Total a solicitar:** {tot_alumnos_edit} personas.")
             
-            submitted_edit = st.form_submit_button("Actualizar Preinscripción")
+            submitted_edit = st.form_submit_button("📩 Enviar Solicitud de Cambio al Secretariado")
             
             if submitted_edit:
                 if not id_del_edit or not clave_edit:
                     st.error("Completá tu ID de Delegación y Contraseña.")
                 elif tot_alumnos_edit == 0:
-                    st.warning("La delegación debe tener al menos 1 cupo.")
+                    st.warning("La delegación debe solicitar al menos 1 cupo.")
                 else:
                     payload = {
-                        "action": "ACTUALIZAR_PREINSCRIPCION",
+                        "action": "SOLICITAR_MODIFICACION_PREINSCRIPCION",
                         "data": {
                             "id_delegacion": id_del_edit,
                             "secret_hash": clave_edit,
@@ -190,11 +190,11 @@ if menu == "1. Preinscripción Escuela":
                         }
                     }
                     
-                    with st.spinner("Actualizando preinscripción..."):
+                    with st.spinner("Enviando solicitud al Secretariado..."):
                         try:
                             res = requests.post(API_URL, json=payload).json()
                             if res.get("status") == "SUCCESS":
-                                st.success("¡Preinscripción actualizada con éxito!")
+                                st.success("📩 ¡Solicitud enviada con éxito! El Secretariado revisará tu cambio a la brevedad.")
                             else:
                                 st.error(f"Error: {res.get('message')}")
                         except Exception as e:
