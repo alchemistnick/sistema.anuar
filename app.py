@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbzyH8LsgDbpjdq_9JSNBRFO81rTEulyaFDrzeEtzp87GNvW-J8if5s0S837haXIDXJkuw/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbz-_CGcnnLW3nsh-EQPZ4CkLzTZvkuK1tLTAXw1D49MpynEqbigCqwEMoGyL5ft8ZTqlA/exec"
 
 @st.cache_data(ttl=60)
 def cargar_modelos_activos():
@@ -25,6 +25,16 @@ def cargar_modelos_activos():
 def cargar_modalidades_modelo(id_modelo):
     try:
         res = requests.get(f"{API_URL}?action=GET_MODALIDADES_MODELO&id_modelo={id_modelo}").json()
+        if res.get("status") == "SUCCESS":
+            return res.get("data", [])
+        return []
+    except Exception:
+        return []
+
+@st.cache_data(ttl=30)
+def cargar_escuelas_aprobadas_cached(id_modelo):
+    try:
+        res = requests.get(f"{API_URL}?action=GET_DELEGACIONES_APROBADAS&id_modelo={id_modelo}").json()
         if res.get("status") == "SUCCESS":
             return res.get("data", [])
         return []
@@ -200,13 +210,11 @@ elif menu == "2. Cargar Comprobante":
 elif menu == "3. Carga de Nómina y Fichas":
     st.subheader(f"Nómina de Participantes y Documentación - {modelo_seleccionado}")
 
-    # Cargar escuelas aprobadas para el selector
     escuelas_disponibles = cargar_escuelas_aprobadas_cached(id_modelo_actual)
 
     if not escuelas_disponibles:
         st.info("Aún no hay escuelas con inscripciones o asignaciones confirmadas.")
     else:
-        # Mapa para el selector { "Nombre del Colegio (DEL-XXX)": dict_escuela }
         opciones_escuelas = {
             f"{e.get('nombre_colegio', 'Escuela')} ({e.get('id_delegacion', 'DEL')})": e 
             for e in escuelas_disponibles if e.get('id_delegacion')
@@ -222,7 +230,6 @@ elif menu == "3. Carga de Nómina y Fichas":
             clave_ingresada = st.text_input("2. Clave Secreta de la Escuela:", type="password")
 
         if id_del_seleccionado and clave_ingresada:
-            # Validar la clave secreta con la registrada en Sheets
             clave_guardada = str(escuela_objeto.get("secret_hash", "")).strip()
 
             if clave_ingresada.strip() != clave_guardada:
@@ -231,7 +238,6 @@ elif menu == "3. Carga de Nómina y Fichas":
                 st.success(f"🔓 Sesión iniciada: **{escuela_objeto.get('nombre_colegio')}**")
                 st.markdown("---")
 
-                # Consultar las bancas asignadas a esta escuela
                 try:
                     res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_del_seleccionado}").json()
                     asignaciones = res_asig.get("data", [])
