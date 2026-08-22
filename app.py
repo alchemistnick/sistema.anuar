@@ -195,77 +195,102 @@ elif menu == "2. Cargar Comprobante":
                         st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
-# MÓDULO 3: CARGA DE NÓMINA Y FICHAS
+# MÓDULO 3: CARGA DE NÓMINA Y FICHAS (LOGIN POR SELECTOR)
 # ---------------------------------------------------------
 elif menu == "3. Carga de Nómina y Fichas":
     st.subheader(f"Nómina de Participantes y Documentación - {modelo_seleccionado}")
-    
-    col_auth1, col_auth2 = st.columns(2)
-    with col_auth1:
-        id_del = st.text_input("Código de Delegación (Ej: DEL-001):")
-    with col_auth2:
-        clave = st.text_input("Clave Secreta:", type="password")
-        
-    if id_del and clave:
-        try:
-            res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_del.strip().upper()}").json()
-            asignaciones = res_asig.get("data", [])
-            
-            if not asignaciones:
-                st.info("Aún no se registran asignaciones de países para esta escuela.")
+
+    # Cargar escuelas aprobadas para el selector
+    escuelas_disponibles = cargar_escuelas_aprobadas_cached(id_modelo_actual)
+
+    if not escuelas_disponibles:
+        st.info("Aún no hay escuelas con inscripciones o asignaciones confirmadas.")
+    else:
+        # Mapa para el selector { "Nombre del Colegio (DEL-XXX)": dict_escuela }
+        opciones_escuelas = {
+            f"{e.get('nombre_colegio', 'Escuela')} ({e.get('id_delegacion', 'DEL')})": e 
+            for e in escuelas_disponibles if e.get('id_delegacion')
+        }
+
+        col_sel, col_pass = st.columns(2)
+        with col_sel:
+            escuela_label = st.selectbox("1. Seleccioná tu Escuela:", list(opciones_escuelas.keys()))
+            escuela_objeto = opciones_escuelas[escuela_label]
+            id_del_seleccionado = escuela_objeto.get("id_delegacion")
+
+        with col_pass:
+            clave_ingresada = st.text_input("2. Clave Secreta de la Escuela:", type="password")
+
+        if id_del_seleccionado and clave_ingresada:
+            # Validar la clave secreta con la registrada en Sheets
+            clave_guardada = str(escuela_objeto.get("secret_hash", "")).strip()
+
+            if clave_ingresada.strip() != clave_guardada:
+                st.error("🔒 Contraseña incorrecta para la escuela seleccionada.")
             else:
-                st.success(f"Se encontraron **{len(asignaciones)}** bancas/lugares asignados:")
-                
-                for asig in asignaciones:
-                    with st.expander(f"📌 {asig.get('organo')} - País: {asig.get('pais')}"):
-                        with st.form(f"form_nom_{asig.get('id_asignacion')}"):
-                            nombre = st.text_input("Nombre del Estudiante *")
-                            apellido = st.text_input("Apellido del Estudiante *")
-                            dni = st.text_input("DNI / Pasaporte *")
-                            alergias = st.text_area("Alergias o Indicaciones Médicas", value="Ninguna")
-                            
-                            ficha_file = st.file_uploader("Ficha Médica (PDF/Imagen) *", type=["pdf", "png", "jpg", "jpeg"], key=f"f_{asig.get('id_asignacion')}")
-                            aut_file = st.file_uploader("Autorización de Imagen (PDF/Imagen) *", type=["pdf", "png", "jpg", "jpeg"], key=f"a_{asig.get('id_asignacion')}")
-                            
-                            btn_nom = st.form_submit_button("Guardar Alumno")
-                            
-                            if btn_nom:
-                                if not nombre or not apellido or not dni:
-                                    st.error("Nombre, Apellido y DNI son obligatorios.")
-                                else:
-                                    f_b64, a_b64 = "", ""
-                                    f_name, a_name = "", ""
-                                    f_mime, a_mime = "", ""
+                st.success(f"🔓 Sesión iniciada: **{escuela_objeto.get('nombre_colegio')}**")
+                st.markdown("---")
+
+                # Consultar las bancas asignadas a esta escuela
+                try:
+                    res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_del_seleccionado}").json()
+                    asignaciones = res_asig.get("data", [])
+
+                    if not asignaciones:
+                        st.info("Aún no se registran bancas de países asignadas para tu institución.")
+                    else:
+                        st.write(f"📋 **Bancas / Lugares Asignados ({len(asignaciones)}):**")
+
+                        for asig in asignaciones:
+                            with st.expander(f"📌 {asig.get('organo')} — País / Representación: **{asig.get('pais')}**"):
+                                with st.form(f"form_nom_{asig.get('id_asignacion')}"):
+                                    nombre = st.text_input("Nombre del Estudiante *")
+                                    apellido = st.text_input("Apellido del Estudiante *")
+                                    dni = st.text_input("DNI / Pasaporte *")
+                                    alergias = st.text_area("Alergias o Indicaciones Médicas", value="Ninguna")
                                     
-                                    if ficha_file:
-                                        f_b64 = base64.b64encode(ficha_file.read()).decode('utf-8')
-                                        f_name = ficha_file.name
-                                        f_mime = ficha_file.type
-                                    if aut_file:
-                                        a_b64 = base64.b64encode(aut_file.read()).decode('utf-8')
-                                        a_name = aut_file.name
-                                        a_mime = aut_file.type
-                                        
-                                    payload = {
-                                        "action": "GUARDAR_PARTICIPANTE_NOMINA",
-                                        "data": {
-                                            "id_delegacion": id_del.strip().upper(),
-                                            "secret_hash": clave,
-                                            "id_modelo": id_modelo_actual,
-                                            "id_asignacion": asig.get("id_asignacion"),
-                                            "rol_mnu": f"{asig.get('organo')} - {asig.get('pais')}",
-                                            "nombre": nombre,
-                                            "apellido": apellido,
-                                            "dni": dni,
-                                            "alergias_medicas": alergias,
-                                            "ficha_b64": f_b64, "ficha_name": f_name, "ficha_mime": f_mime,
-                                            "aut_b64": a_b64, "aut_name": a_name, "aut_mime": a_mime
-                                        }
-                                    }
-                                    res_save = requests.post(API_URL, json=payload).json()
-                                    if res_save.get("status") == "SUCCESS":
-                                        st.success("¡Alumno guardado correctamente!")
-                                    else:
-                                        st.error(f"Error: {res_save.get('message')}")
-        except Exception as e:
-            st.error(f"Error al cargar asignaciones: {e}")
+                                    ficha_file = st.file_uploader("Ficha Médica (PDF/Imagen) *", type=["pdf", "png", "jpg", "jpeg"], key=f"f_{asig.get('id_asignacion')}")
+                                    aut_file = st.file_uploader("Autorización de Imagen (PDF/Imagen) *", type=["pdf", "png", "jpg", "jpeg"], key=f"a_{asig.get('id_asignacion')}")
+                                    
+                                    btn_nom = st.form_submit_button("Guardar Alumno")
+                                    
+                                    if btn_nom:
+                                        if not nombre or not apellido or not dni:
+                                            st.error("Nombre, Apellido y DNI son obligatorios.")
+                                        else:
+                                            f_b64, a_b64 = "", ""
+                                            f_name, a_name = "", ""
+                                            f_mime, a_mime = "", ""
+                                            
+                                            if ficha_file:
+                                                f_b64 = base64.b64encode(ficha_file.read()).decode('utf-8')
+                                                f_name = ficha_file.name
+                                                f_mime = ficha_file.type
+                                            if aut_file:
+                                                a_b64 = base64.b64encode(aut_file.read()).decode('utf-8')
+                                                a_name = aut_file.name
+                                                a_mime = aut_file.type
+                                                
+                                            payload = {
+                                                "action": "GUARDAR_PARTICIPANTE_NOMINA",
+                                                "data": {
+                                                    "id_delegacion": id_del_seleccionado,
+                                                    "secret_hash": clave_ingresada,
+                                                    "id_modelo": id_modelo_actual,
+                                                    "id_asignacion": asig.get("id_asignacion"),
+                                                    "rol_mnu": f"{asig.get('organo')} - {asig.get('pais')}",
+                                                    "nombre": nombre,
+                                                    "apellido": apellido,
+                                                    "dni": dni,
+                                                    "alergias_medicas": alergias,
+                                                    "ficha_b64": f_b64, "ficha_name": f_name, "ficha_mime": f_mime,
+                                                    "aut_b64": a_b64, "aut_name": a_name, "aut_mime": a_mime
+                                                }
+                                            }
+                                            res_save = requests.post(API_URL, json=payload).json()
+                                            if res_save.get("status") == "SUCCESS":
+                                                st.success("¡Alumno cargado con éxito!")
+                                            else:
+                                                st.error(f"Error: {res_save.get('message')}")
+                except Exception as e:
+                    st.error(f"Error de conexión al obtener asignaciones: {e}")
