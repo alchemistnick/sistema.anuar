@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 import base64
 
 st.set_page_config(
@@ -9,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbzl95f1DzqbR7ZylmF4xxGFsG5Y8Eyokd1q8ZvDWqm0-qb3ff8bs6wffwBzEM0XB0R9uA/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbzCVDquLKvY64UMPLtZ6brcuC_1817FHCSvyVbOBVCAGhBA9F0KFiP31OMNMUfwDOHJ7Q/exec"
 
 @st.cache_data(ttl=60)
 def cargar_modelos_activos():
@@ -147,7 +146,7 @@ if menu == "1. Preinscripción Escuela":
                     try:
                         res = requests.post(API_URL, json=payload).json()
                         if res.get("status") == "SUCCESS":
-                            st.success(f"¡Preinscripción enviada con éxito para **{modelo_seleccionado}**! Guardá este código de delegación: **{res['data']['id_delegacion']}**")
+                            st.success(f"¡Preinscripción enviada con éxito para **{modelo_seleccionado}**! Código de delegación: **{res['data']['id_delegacion']}**")
                         else:
                             st.error(f"Error: {res.get('message')}")
                     except Exception as e:
