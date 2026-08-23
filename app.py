@@ -8,7 +8,8 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbz-_CGcnnLW3nsh-EQPZ4CkLzTZvkuK1tLTAXw1D49MpynEqbigCqwEMoGyL5ft8ZTqlA/exec"
+# URL DE LA NUEVA IMPLEMENTACIÓN DE APPS SCRIPT
+API_URL = "https://script.google.com/macros/s/AKfycbybpH8ByPnhJycsXgZI5Xf-wDHdBLI0pZwfdbq0xo2Q6RAypxgUcEaeW3IwZ6uq_pY8SQ/exec"
 
 @st.cache_data(ttl=60)
 def cargar_modelos_activos():
