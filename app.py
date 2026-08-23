@@ -23,21 +23,23 @@ def api_get(action, params=""):
 
 st.title("🏫 Portal de Instituciones - Modelos ONU")
 
-# 🎛️ INTERRUPTOR DE MODO EVENTO 
-# Cambiar a True durante los días del Modelo para bloquear inscripciones y dejar activo únicamente el módulo de acreditación.
+# 🎛️ INTERRUPTOR DE MODO EVENTO
+# - Si está en False: Muestra el menú normal de escuelas y oculta la acreditación.
+# - Si está en True: Bloquea todo lo demás y deja activa exclusivamente la terminal de acreditación.
 MODO_SOLO_ACREDITACION = False 
 
-menu = st.sidebar.selectbox("Seleccionar Opción:", [
-    "🎫 Acreditación Presencial",
-    "📝 Preinscripción Institucional", 
-    "🔑 Ingreso a Mi Delegación", 
-    "💳 Subir Comprobante de Pago", 
-    "📋 Carga de Nómina y Documentación"
-])
-
-if MODO_SOLO_ACREDITACION and menu != "🎫 Acreditación Presencial":
-    st.warning("⚠️ El sistema se encuentra en **Modo Acreditación (Evento en Curso)**. Las preinscripciones y cargas de documentación se encuentran temporalmente suspendidas.")
-    st.stop()
+# Definición dinámica del menú según el interruptor
+if MODO_SOLO_ACREDITACION:
+    menu = st.sidebar.selectbox("Seleccionar Opción:", [
+        "🎫 Acreditación Presencial"
+    ])
+else:
+    menu = st.sidebar.selectbox("Seleccionar Opción:", [
+        "📝 Preinscripción Institucional", 
+        "🔑 Ingreso a Mi Delegación", 
+        "💳 Subir Comprobante de Pago", 
+        "📋 Carga de Nómina y Documentación"
+    ])
 
 # ---------------------------------------------------------
 # 1. ACREDITACIÓN PRESENCIAL
