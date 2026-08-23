@@ -175,89 +175,126 @@ elif menu == "💳 Subir Comprobante de Pago":
 elif menu == "📋 Carga de Nómina y Documentación":
     st.subheader("📋 Registro de Participantes y Fichas Médicas/Autorizaciones")
 
-    with st.form("form_nomina"):
+    st.write("Ingrese sus credenciales institucionales para verificar sus asignaciones y cupos permitidos antes de cargar la nómina.")
+
+    with st.form("form_verif_nomina"):
         id_del_nom = st.text_input("Código de Delegación (Ej: DEL-001):").strip().upper()
         hash_nom = st.text_input("Clave de Acceso:", type="password").strip()
-        
-        st.markdown("---")
-        st.markdown("### Datos del Estudiante")
-        id_asignacion_alum = st.text_input("ID de Asignación (Ej: ASIG-0001 proporcionado por secretaría):").strip()
-        rol_mnu = st.text_input("Rol / Cargo o Comisión (Ej: Embajador - Bahrein):")
-        nombre = st.text_input("Nombre:")
-        apellido = st.text_input("Apellido:")
-        dni = st.text_input("DNI:")
-        alergias_medicas = st.text_input("Observaciones o Alergias Médicas (Escribir 'Ninguna' si no posee):", value="Ninguna")
+        btn_verificar = st.form_submit_button("Verificar Estado y Cupos")
 
-        st.markdown("### Documentación Adjunta (PDF o Imagen)")
-        file_ficha = st.file_uploader("Ficha Médica Firmada:", type=["pdf", "jpg", "png"], key="ficha")
-        file_aut = st.file_uploader("Autorización de Menores / Padres:", type=["pdf", "jpg", "png"], key="aut")
+    if id_del_nom and hash_nom:
+        # Validar credenciales y obtener datos de la escuela y cupos
+        delegaciones = api_get("GET_TODAS_DELEGACIONES")
+        escuela = next((d for d in delegaciones if str(d.get("id_delegacion")).strip().upper() == id_del_nom and str(d.get("secret_hash")).strip() == hash_nom), None)
 
-        btn_guardar_alumno = st.form_submit_button("Guardar Participante en Nómina")
+        if not escuela:
+            st.error("⚠️ Código de delegación o clave incorrectos.")
+        else:
+            # Obtener asignaciones / bancas permitidas
+            res_asig = requests.get(f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_del_nom}").json()
+            bancas_asignadas = res_asig.get("data", [])
+            limite_bancas = len(bancas_asignadas) if len(bancas_asignadas) > 0 else int(escuela.get("cupos_solicitados", 5))
 
-        if btn_guardar_alumno:
-            if not id_del_nom or not hash_nom or not nombre or not apellido or not dni:
-                st.error("Por favor completa los datos obligatorios del alumno.")
+            # Obtener alumnos ya cargados en nómina
+            nominas_todas = api_get("GET_TODAS_NOMINAS")
+            alumnos_actuales = [n for n in nominas_todas if str(n.get("id_delegacion")).strip().upper() == id_del_nom]
+            cargados_count = len(alumnos_actuales)
+
+            st.markdown("---")
+            col_info1, col_info2 = st.columns(2)
+            with col_info1:
+                st.info(f"🏛️ **Institución:** {escuela.get('nombre_colegio')}")
+                st.markdown(f"**Cupos / Bancas Asignadas:** `{limite_bancas}`")
+            with col_info2:
+                st.markdown(f"**Participantes ya cargados:** `{cargados_count} / {limite_bancas}`")
+
+            if cargados_count > 0:
+                st.markdown("### 📋 Alumnos ya registrados:")
+                for idx, alu in enumerate(alumnos_actuales):
+                    st.write(f"{idx+1}. **{alu.get('nombre')} {alu.get('apellido')}** (DNI: {alu.get('dni')}) — *Banca:* {alu.get('rol_mnu')}")
+
+            st.markdown("---")
+
+            if cargados_count >= limite_bancas:
+                st.warning(f"⚠️ Has alcanzado el límite máximo de {limite_bancas} participantes permitidos para tu institución.")
             else:
-                ficha_b64, ficha_name, ficha_mime = "", "", ""
-                aut_b64, aut_name, aut_mime = "", "", ""
+                st.markdown("### ➕ Registrar Nuevo Participante")
+                with st.form("form_agregar_participante"):
+                    id_asignacion_alum = st.text_input("ID de Asignación (Ej: ASIG-0001 proporcionado por secretaría):").strip()
+                    rol_mnu = st.text_input("Rol / Cargo o Comisión (Ej: Embajador - Bahrein):")
+                    nombre = st.text_input("Nombre:")
+                    apellido = st.text_input("Apellido:")
+                    dni = st.text_input("DNI:")
+                    alergias_medicas = st.text_input("Observaciones o Alergias Médicas (Escribir 'Ninguna' si no posee):", value="Ninguna")
 
-                if file_ficha:
-                    ficha_b64 = base64.b64encode(file_ficha.read()).decode('utf-8')
-                    ficha_name = file_ficha.name
-                    ficha_mime = file_ficha.type
+                    st.markdown("### Documentación Adjunta (PDF o Imagen)")
+                    file_ficha = st.file_uploader("Ficha Médica Firmada:", type=["pdf", "jpg", "png"], key="ficha")
+                    file_aut = st.file_uploader("Autorización de Menores / Padres:", type=["pdf", "jpg", "png"], key="aut")
 
-                if file_aut:
-                    aut_b64 = base64.b64encode(file_aut.read()).decode('utf-8')
-                    aut_name = file_aut.name
-                    aut_mime = file_aut.type
+                    btn_guardar_alumno = st.form_submit_button("Guardar Participante en Nómina")
 
-                payload = {
-                    "action": "GUARDAR_PARTICIPANTE_NOMINA",
+                    if btn_guardar_alumno:
+                        if not nombre or not apellido or not dni:
+                            st.error("Por favor completa los datos obligatorios del alumno.")
+                        else:
+                            ficha_b64, ficha_name, ficha_mime = "", "", ""
+                            aut_b64, aut_name, aut_mime = "", "", ""
+
+                            if file_ficha:
+                                ficha_b64 = base64.b64encode(file_ficha.read()).decode('utf-8')
+                                ficha_name = file_ficha.name
+                                ficha_mime = file_ficha.type
+
+                            if file_aut:
+                                aut_b64 = base64.b64encode(file_aut.read()).decode('utf-8')
+                                aut_name = file_aut.name
+                                aut_mime = file_aut.type
+
+                            payload = {
+                                "action": "GUARDAR_PARTICIPANTE_NOMINA",
+                                "data": {
+                                    "id_delegacion": id_del_nom,
+                                    "secret_hash": hash_nom,
+                                    "id_asignacion": id_asignacion_alum,
+                                    "rol_mnu": rol_mnu,
+                                    "nombre": nombre,
+                                    "apellido": apellido,
+                                    "dni": dni,
+                                    "alergias_medicas": alergias_medicas,
+                                    "ficha_b64": ficha_b64,
+                                    "ficha_name": ficha_name,
+                                    "ficha_mime": ficha_mime,
+                                    "aut_b64": aut_b64,
+                                    "aut_name": aut_name,
+                                    "aut_mime": aut_mime
+                                }
+                            }
+
+                            with st.spinner("Subiendo archivos a Drive y guardando participante..."):
+                                try:
+                                    res = requests.post(API_URL, json=payload).json()
+                                    if res.get("status") == "SUCCESS":
+                                        st.success("¡Participante guardado con éxito en la nómina!")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Error: {res.get('message')}")
+                                except Exception as e:
+                                    st.error(f"Error de conexión: {e}")
+
+            st.markdown("---")
+            if st.button("📌 Finalizar y Enviar Documentación a Revisión"):
+                payload_fin = {
+                    "action": "CONFIRMAR_CARGA_DOCUMENTACION",
                     "data": {
                         "id_delegacion": id_del_nom,
-                        "secret_hash": hash_nom,
-                        "id_asignacion": id_asignacion_alum,
-                        "rol_mnu": rol_mnu,
-                        "nombre": nombre,
-                        "apellido": apellido,
-                        "dni": dni,
-                        "alergias_medicas": alergias_medicas,
-                        "ficha_b64": ficha_b64,
-                        "ficha_name": ficha_name,
-                        "ficha_mime": ficha_mime,
-                        "aut_b64": aut_b64,
-                        "aut_name": aut_name,
-                        "aut_mime": aut_mime
+                        "secret_hash": hash_nom
                     }
                 }
-
-                with st.spinner("Subiendo archivos a Drive y guardando participante..."):
-                    try:
-                        res = requests.post(API_URL, json=payload).json()
-                        if res.get("status") == "SUCCESS":
-                            st.success("¡Participante guardado con éxito en la nómina!")
-                        else:
-                            st.error(f"Error: {res.get('message')}")
-                    except Exception as e:
-                        st.error(f"Error de conexión: {e}")
-
-    st.markdown("---")
-    if st.button("📌 Finalizar y Enviar Documentación a Revisión"):
-        if 'id_del_nom' in locals() and id_del_nom and 'hash_nom' in locals() and hash_nom:
-            payload_fin = {
-                "action": "CONFIRMAR_CARGA_DOCUMENTACION",
-                "data": {
-                    "id_delegacion": id_del_nom.strip().upper(),
-                    "secret_hash": hash_nom.strip()
-                }
-            }
-            try:
-                res = requests.post(API_URL, json=payload_fin).json()
-                if res.get("status") == "SUCCESS":
-                    st.success("¡Documentación enviada a revisión con éxito!")
-                else:
-                    st.error(f"Error: {res.get('message')}")
-            except Exception as e:
-                st.error(f"Error: {e}")
-        else:
-            st.warning("Ingresa tu Código de Delegación y Clave de Acceso arriba para confirmar.")
+                try:
+                    res = requests.post(API_URL, json=payload_fin).json()
+                    if res.get("status") == "SUCCESS":
+                        st.success("¡Documentación enviada a revisión con éxito!")
+                    else:
+                        st.error(f"Error: {res.get('message')}")
+                except Exception as e:
+                    st.error(f"Error: {e}")
