@@ -44,7 +44,7 @@ else:
 # ---------------------------------------------------------
 if menu == "🎫 Acreditación Presencial":
     st.subheader("🎫 Terminal de Acreditación - Modelos ONU")
-     st.write("Este fin de semana estamos de Modelo para una mejor gestión de otros Modelos ONU puede volver el Lunes")
+    st.write("Este fin de semana estamos de Modelo; para una mejor gestión de otros Modelos ONU puede volver el Lunes.")
     st.write("Seleccione el Modelo correspondiente e ingrese el DNI del participante para validar su ingreso.")
 
     modelos = api_get("GET_MODELOS_ACTIVOS")
