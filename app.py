@@ -222,7 +222,6 @@ elif menu == "📋 Carga de Nómina y Documentación":
 
             st.markdown("---")
 
-            # Pestañas para separar la carga de Estudiantes y Docentes
             tab_est, tab_doc = st.tabs(["👨‍🎓 Registrar Estudiante", "👨‍🏫 Registrar Docente Acompañante"])
 
             with tab_est:
@@ -303,6 +302,7 @@ elif menu == "📋 Carga de Nómina y Documentación":
                         nombre_doc = st.text_input("Nombre del Docente:")
                         apellido_doc = st.text_input("Apellido del Docente:")
                         dni_doc = st.text_input("DNI del Docente:")
+                        email_doc = st.text_input("Correo Electrónico (Email) del Docente:")
                         cel_doc = st.text_input("Celular de Contacto del Docente:")
                         
                         st.markdown("### Documentación Docente")
@@ -311,8 +311,8 @@ elif menu == "📋 Carga de Nómina y Documentación":
                         btn_guardar_doc = st.form_submit_button("Guardar Docente Acompañante")
 
                         if btn_guardar_doc:
-                            if not nombre_doc or not apellido_doc or not dni_doc:
-                                st.error("Completa los datos obligatorios del docente.")
+                            if not nombre_doc or not apellido_doc or not dni_doc or not email_doc:
+                                st.error("Completa los datos obligatorios del docente (Nombre, Apellido, DNI y Email).")
                             else:
                                 aut_doc_b64, aut_doc_name, aut_doc_mime = "", "", ""
                                 if file_doc_aut:
@@ -330,7 +330,7 @@ elif menu == "📋 Carga de Nómina y Documentación":
                                         "nombre": nombre_doc,
                                         "apellido": apellido_doc,
                                         "dni": dni_doc,
-                                        "alergias_medicas": f"Cel: {cel_doc}",
+                                        "alergias_medicas": f"Email: {email_doc} | Cel: {cel_doc}",
                                         "ficha_b64": "", "ficha_name": "", "ficha_mime": "",
                                         "aut_b64": aut_doc_b64, "aut_name": aut_doc_name, "aut_mime": aut_doc_mime
                                     }
