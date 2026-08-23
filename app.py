@@ -8,8 +8,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# NUEVA URL DE LA API DE APPS SCRIPT
-API_URL = "https://script.google.com/macros/s/AKfycbzG8zPIgu0iR1gqpBU1JlwEZYIDIFquyWtKWcPRLrSkZFa8fIsPD6RdccFQdX3Y97zdng/exec"
+# NUEVA URL DE LA API DE APPS SCRIPT ACTUALIZADA
+API_URL = "https://script.google.com/macros/s/AKfycbxMsoNWVYS9CJRHSj22s25ivYY6ITSK6vj059JmjDKb_YMr0Qy8GyLQx3fQqQWf7PwJHA/exec"
 
 @st.cache_data(ttl=60)
 def cargar_modelos_activos():
@@ -205,12 +205,11 @@ elif menu == "2. Cargar Comprobante":
                         st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
-# MÓDULO 3: CARGA DE NÓMINA Y FICHAS (LOGIN PRIVADO POR MAIL Y CONTRASEÑA)
+# MÓDULO 3: CARGA DE NÓMINA Y FICHAS (LOGIN PRIVADO + CONFIRMACIÓN)
 # ---------------------------------------------------------
 elif menu == "3. Carga de Nómina y Fichas":
     st.subheader(f"Nómina de Participantes y Documentación - {modelo_seleccionado}")
     
-    # Si no hay sesión iniciada, mostramos únicamente el formulario de acceso privado
     if "escuela_sesion" not in st.session_state:
         st.markdown("Ingresá las credenciales asignadas a tu institución para acceder al sistema.")
         
@@ -248,7 +247,6 @@ elif menu == "3. Carga de Nómina y Fichas":
                             st.success("¡Sesión iniciada correctamente!")
                             st.rerun()
 
-    # Si la sesión está activa, mostramos exclusivamente el panel de esa escuela
     else:
         escuela_activa = st.session_state["escuela_sesion"]
         id_del_seleccionado = escuela_activa.get("id_delegacion")
@@ -321,5 +319,37 @@ elif menu == "3. Carga de Nómina y Fichas":
                                         st.success("¡Alumno cargado con éxito!")
                                     else:
                                         st.error(f"Error: {res_save.get('message')}")
+
+                # --- BOTÓN DE CONFIRMACIÓN DE CARGA TOTAL DE DOCUMENTACIÓN ---
+                st.markdown("---")
+                st.markdown("### 🏁 Finalización del Proceso")
+                
+                estado_actual = str(escuela_activa.get("estado", "REGISTRADO")).upper()
+                
+                if estado_actual == "DOCUMENTACION_COMPLETA":
+                    st.success("✅ Ya confirmaste la carga total de tu documentación. El secretariado la está verificando.")
+                else:
+                    st.warning("⚠️ Una vez que hayas cargado a todos los participantes con sus fichas y autorizaciones, hacé clic en el botón para notificar al secretariado.")
+                    if st.button("📤 Confirmar Carga Total de Documentación"):
+                        payload_conf = {
+                            "action": "CONFIRMAR_CARGA_DOCUMENTACION",
+                            "data": {
+                                "id_delegacion": id_del_seleccionado,
+                                "secret_hash": escuela_activa.get("secret_hash")
+                            }
+                        }
+                        with st.spinner("Enviando confirmación..."):
+                            try:
+                                res_conf = requests.post(API_URL, json=payload_conf).json()
+                                if res_conf.get("status") == "SUCCESS":
+                                    st.success("¡Documentación confirmada con éxito! Se ha notificado al equipo organizador.")
+                                    # Actualizamos temporalmente el estado en la sesión para refrescar la vista
+                                    escuela_activa["estado"] = "DOCUMENTACION_COMPLETA"
+                                    st.rerun()
+                                else:
+                                    st.error(f"Error: {res_conf.get('message')}")
+                            except Exception as e:
+                                st.error(f"Error de conexión: {e}")
+
         except Exception as e:
             st.error(f"Error de conexión al obtener asignaciones: {e}")
