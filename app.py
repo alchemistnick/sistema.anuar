@@ -26,7 +26,7 @@ st.title("🏫 Portal de Instituciones - Modelos ONU")
 # 🎛️ INTERRUPTOR DE MODO EVENTO
 # - Si está en False: Muestra el menú normal de escuelas y oculta la acreditación.
 # - Si está en True: Bloquea todo lo demás y deja activa exclusivamente la terminal de acreditación.
-MODO_SOLO_ACREDITACION = False 
+MODO_SOLO_ACREDITACION = True
 
 # Definición dinámica del menú según el interruptor
 if MODO_SOLO_ACREDITACION:
