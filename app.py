@@ -23,10 +23,10 @@ def api_get(action, params=""):
 
 st.title("🏫 Portal de Instituciones - Modelos ONU")
 
-# 🎛️ INTERRUPTOR DE MODO EVENTO
+# 🎛️ INTERRUPTOR DE MODO EVENTO (¡Sin comillas para que sea booleano!)
 # - False: Muestra el menú normal de escuelas y oculta la acreditación.
 # - True: Muestra exclusivamente la terminal de acreditación presencial.
-MODO_SOLO_ACREDITACION = "False"
+MODO_SOLO_ACREDITACION = False 
 
 if MODO_SOLO_ACREDITACION:
     menu = st.sidebar.selectbox("Seleccionar Opción:", ["🎫 Acreditación Presencial"])
