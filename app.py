@@ -9,7 +9,595 @@ st.set_page_config(
 )
 
 # NUEVA URL DE LA API DE APPS SCRIPT ACTUALIZADA
-API_URL = "https://script.google.com/macros/s/AKfycbxVDRWF11W-M6b7MxNo5D1zBjEa361eToBKwlxuVTpnauRfDvw1R39SLjkFCPbL7xXhbQ/exec"
+API_URL = "/**
+ * SISTEMA INTEGRAL MONUCBA / MNU 2026 - BACKEND API (Google Apps Script)
+ */
+
+function doGet(e) {
+  try {
+    const action = e.parameter.action;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    if (action === "PING") {
+      return responderJSON({ status: "SUCCESS", message: "API activa y conectada" });
+    }
+
+    if (action === "GET_MODELOS_ACTIVOS") {
+      const sheet = ss.getSheetByName("PARAMETROS_MODELOS");
+      if (!sheet) return responderJSON({ status: "ERROR", message: "Falta la solapa PARAMETROS_MODELOS" });
+      const data = obtenerDatosTabla(sheet);
+      const activos = data.filter(m => String(m.activo).toUpperCase() === "TRUE");
+      return responderJSON({ status: "SUCCESS", data: activos });
+    }
+
+    if (action === "GET_MODALIDADES_MODELO") {
+      const idModelo = e.parameter.id_modelo;
+      const sheet = ss.getSheetByName("MODALIDADES_MODELO");
+      if (!sheet) return responderJSON({ status: "SUCCESS", data: [] });
+      const data = obtenerDatosTabla(sheet);
+      const filtrados = data.filter(m => String(m.id_modelo).trim() === String(idModelo).trim());
+      return responderJSON({ status: "SUCCESS", data: filtrados });
+    }
+
+    if (action === "GET_PAGOS_PENDIENTES") {
+      const sheet = ss.getSheetByName("PAGOS");
+      if (!sheet) return responderJSON({ status: "SUCCESS", data: [] });
+      const data = obtenerDatosTabla(sheet);
+      const pendientes = data.filter(row => String(row.estado_pago || "").toUpperCase() === "PENDIENTE");
+      return responderJSON({ status: "SUCCESS", data: pendientes });
+    }
+
+    if (action === "GET_TODOS_PAGOS") {
+      const sheet = ss.getSheetByName("PAGOS");
+      if (!sheet) return responderJSON({ status: "SUCCESS", data: [] });
+      const data = obtenerDatosTabla(sheet);
+      return responderJSON({ status: "SUCCESS", data: data });
+    }
+
+    if (action === "GET_TODAS_DELEGACIONES") {
+      const idModelo = e.parameter.id_modelo;
+      const sheetDel = ss.getSheetByName("DELEGACIONES");
+      if (!sheetDel) return responderJSON({ status: "SUCCESS", data: [] });
+      const delegaciones = obtenerDatosTabla(sheetDel);
+      
+      const filtradas = idModelo 
+        ? delegaciones.filter(d => String(d.id_modelo || "").trim().toUpperCase() === String(idModelo).trim().toUpperCase()) 
+        : delegaciones;
+
+      return responderJSON({ status: "SUCCESS", data: filtradas });
+    }
+
+    if (action === "GET_ASIGNACIONES_DELEGACION") {
+      const idDelegacion = String(e.parameter.id_delegacion || "").trim().toUpperCase();
+      const sheetAsig = ss.getSheetByName("ASIGNACIONES");
+      if (!sheetAsig) return responderJSON({ status: "SUCCESS", data: [] });
+      
+      const rows = sheetAsig.getDataRange().getValues();
+      if (rows.length < 2) return responderJSON({ status: "SUCCESS", data: [] });
+
+      let resultados = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const idAsig = String(row[0] || "").trim();
+        const organo = String(row[1] || "").trim();
+        const pais = String(row[2] || "").trim();
+        const idDelAsig = String(row[3] || "").trim().toUpperCase();
+        const idMod = String(row[4] || "").trim();
+
+        if (idDelAsig === idDelegacion || idDelAsig.includes(idDelegacion)) {
+          if (idAsig !== "") {
+            resultados.push({
+              id_asignacion: idAsig,
+              organo: organo,
+              pais: pais,
+              id_delegacion_asignada: idDelAsig,
+              id_modelo: idMod
+            });
+          }
+        }
+      }
+
+      return responderJSON({ status: "SUCCESS", data: resultados });
+    }
+
+    if (action === "GET_TODAS_NOMINAS") {
+      const idModelo = e.parameter.id_modelo;
+      const sheetNom = ss.getSheetByName("NOMINAS");
+      if (!sheetNom) return responderJSON({ status: "SUCCESS", data: [] });
+      
+      const rows = sheetNom.getDataRange().getValues();
+      if (rows.length < 2) return responderJSON({ status: "SUCCESS", data: [] });
+
+      let nominasList = [];
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r[0]) continue;
+
+        nominasList.push({
+          id_delegado: r[0],
+          id_delegacion: String(r[1] || "").trim(),
+          id_asignacion: r[2] || "-",
+          rol_mnu: r[3] || "-",
+          nombre: r[4] || "",
+          apellido: r[5] || "",
+          dni: r[6] || "",
+          alergias_medicas: r[7] || "Ninguna",
+          ficha_medica_id: r[8] || "-",
+          autorizacion_id: r[9] || "-",
+          id_modelo: r[10] || "GENERAL"
+        });
+      }
+
+      const filtradas = idModelo ? nominasList.filter(n => String(n.id_modelo).trim().toUpperCase() === String(idModelo).trim().toUpperCase()) : nominasList;
+      return responderJSON({ status: "SUCCESS", data: filtradas });
+    }
+
+    return responderJSON({ status: "ERROR", message: "Acción GET no válida" });
+    
+  } catch (err) {
+    return responderJSON({ status: "ERROR", message: err.toString() });
+  }
+}
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  
+  if (lock.tryLock(10000)) {
+    try {
+      const payload = JSON.parse(e.postData.contents);
+      const action = payload.action;
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+      if (action === "REGISTRAR_DELEGACION") {
+        const res = registrarDelegacion(ss, payload.data);
+        return responderJSON({ status: "SUCCESS", data: res });
+      }
+
+      if (action === "CAMBIAR_ESTADO_PAGO") {
+        const sheet = ss.getSheetByName("PAGOS");
+        const idPago = String(payload.data.id_pago).trim();
+        const nuevoEstado = String(payload.data.nuevo_estado).trim().toUpperCase();
+        
+        const rows = sheet.getDataRange().getValues();
+        let headerIdx = 0;
+        if (String(rows[0][0]).toLowerCase().includes("columna")) headerIdx = 1;
+        
+        const headers = rows[headerIdx];
+        let colEstadoIdx = headers.findIndex(h => String(h).trim().toLowerCase() === "estado_pago" || String(h).trim().toLowerCase() === "estado");
+        if (colEstadoIdx === -1) colEstadoIdx = 5;
+
+        let filaEncontrada = -1;
+        let idDelegacionAsociada = "";
+        let montoPago = "";
+
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+          if (String(rows[i][0]).trim() === idPago) {
+            filaEncontrada = i + 1;
+            idDelegacionAsociada = String(rows[i][1]).trim();
+            montoPago = rows[i][2];
+            break;
+          }
+        }
+
+        if (filaEncontrada !== -1) {
+          sheet.getRange(filaEncontrada, colEstadoIdx + 1).setValue(nuevoEstado);
+
+          if (idDelegacionAsociada) {
+            const sheetDel = ss.getSheetByName("DELEGACIONES");
+            const delegaciones = obtenerDatosTabla(sheetDel);
+            const del = delegaciones.find(d => String(d.id_delegacion).trim().toUpperCase() === idDelegacionAsociada.toUpperCase());
+
+            if (del && del.docente_email) {
+              const asunto = `Actualización de Estado de Pago (${idPago}) - Modelos ONU`;
+              const cuerpoHtml = `
+                <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                  <h2 style="color: ${nuevoEstado === 'APROBADO' ? '#27ae60' : '#c0392b'};">Estado de Pago: ${nuevoEstado}</h2>
+                  <p>Estimado/a <b>${del.docente_apellido_nombre}</b>,</p>
+                  <p>El pago de la institución <b>${del.nombre_colegio}</b> por un monto de $${montoPago} fue actualizado a: <b>${nuevoEstado}</b>.</p>
+                  ${nuevoEstado === 'APROBADO' ? '<p>🎉 ¡Ya podés ingresar a la plataforma con tu correo y contraseña para ver tus asignaciones!</p>' : ''}
+                  <p>Atentamente,<br><b>Secretariado - Modelos ONU</b></p>
+                </div>
+              `;
+              enviarMailSeguro(ss, del.docente_email, asunto, cuerpoHtml);
+            }
+          }
+          return responderJSON({ status: "SUCCESS", message: `Pago actualizado` });
+        }
+        return responderJSON({ status: "ERROR", message: "Pago no encontrado" });
+      }
+
+      if (action === "SUBIR_COMPROBANTE_PAGO") {
+        const sheetDel = ss.getSheetByName("DELEGACIONES");
+        const delegaciones = obtenerDatosTabla(sheetDel);
+        const del = delegaciones.find(d => 
+          String(d.id_delegacion).trim().toUpperCase() === String(payload.data.id_delegacion).trim().toUpperCase() && 
+          String(d.secret_hash).trim() === String(payload.data.secret_hash).trim()
+        );
+
+        if (!del) return responderJSON({ status: "ERROR", message: "Código o clave incorrecta." });
+
+        const folder = DriveApp.getRootFolder();
+        const blob = Utilities.newBlob(Utilities.base64Decode(payload.data.file_base64), payload.data.file_mime, payload.data.file_name);
+        const file = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+        const sheetPagos = ss.getSheetByName("PAGOS");
+        const idPago = "PAGO-" + String(sheetPagos.getLastRow() + 1).padStart(4, '0');
+
+        sheetPagos.appendRow([
+          idPago, del.id_delegacion, payload.data.monto, file.getId(), file.getUrl(), "PENDIENTE", new Date().toISOString(), "", del.id_modelo || "GENERAL"
+        ]);
+
+        return responderJSON({ status: "SUCCESS", message: "Comprobante subido." });
+      }
+
+      if (action === "GUARDAR_PARTICIPANTE_NOMINA") {
+        const sheetDel = ss.getSheetByName("DELEGACIONES");
+        const delegaciones = obtenerDatosTabla(sheetDel);
+        const del = delegaciones.find(d => 
+          String(d.id_delegacion).trim().toUpperCase() === String(payload.data.id_delegacion).trim().toUpperCase() && 
+          String(d.secret_hash).trim() === String(payload.data.secret_hash).trim()
+        );
+
+        if (!del) return responderJSON({ status: "ERROR", message: "Autenticación fallida." });
+
+        const folder = DriveApp.getRootFolder();
+        let fichaId = "-", autId = "-";
+
+        if (payload.data.ficha_b64) {
+          const fileF = folder.createFile(Utilities.newBlob(Utilities.base64Decode(payload.data.ficha_b64), payload.data.ficha_mime, payload.data.ficha_name));
+          fichaId = fileF.getId();
+        }
+        if (payload.data.aut_b64) {
+          const fileA = folder.createFile(Utilities.newBlob(Utilities.base64Decode(payload.data.aut_b64), payload.data.aut_mime, payload.data.aut_name));
+          autId = fileA.getId();
+        }
+
+        const sheetNom = ss.getSheetByName("NOMINAS");
+        const idDelegado = "DELG-" + String(sheetNom.getLastRow() + 1).padStart(4, '0');
+
+        sheetNom.appendRow([
+          idDelegado, del.id_delegacion, payload.data.id_asignacion || "-", payload.data.rol_mnu || "-", payload.data.nombre, payload.data.apellido, payload.data.dni, payload.data.alergias_medicas || "Ninguna", fichaId, autId, payload.data.id_modelo || "GENERAL"
+        ]);
+
+        return responderJSON({ status: "SUCCESS", message: "Participante registrado" });
+      }
+
+      if (action === "CONFIRMAR_CARGA_DOCUMENTACION") {
+        const sheetDel = ss.getSheetByName("DELEGACIONES");
+        const rows = sheetDel.getDataRange().getValues();
+        let filaEncontrada = -1;
+
+        for (let i = 1; i < rows.length; i++) {
+          if (String(rows[i][0]).trim().toUpperCase() === String(payload.data.id_delegacion).trim().toUpperCase() &&
+              String(rows[i][8]).trim() === String(payload.data.secret_hash).trim()) {
+            filaEncontrada = i + 1;
+            break;
+          }
+        }
+
+        if (filaEncontrada !== -1) {
+          sheetDel.getRange(filaEncontrada, 11).setValue("DOCUMENTACION_COMPLETA");
+          return responderJSON({ status: "SUCCESS", message: "Documentación confirmada." });
+        }
+        return responderJSON({ status: "ERROR", message: "Credenciales inválidas." });
+      }
+
+      if (action === "APROBAR_LEGAJO_ESCUELA") {
+        const sheetDel = ss.getSheetByName("DELEGACIONES");
+        const idDel = String(payload.data.id_delegacion).trim().toUpperCase();
+        
+        const rowsDel = sheetDel.getDataRange().getValues();
+        let filaDel = -1;
+        let infoEscuela = null;
+
+        for (let i = 1; i < rowsDel.length; i++) {
+          if (String(rowsDel[i][0]).trim().toUpperCase() === idDel) {
+            filaDel = i + 1;
+            infoEscuela = {
+              nombre: rowsDel[i][1],
+              responsable: rowsDel[i][5],
+              email: rowsDel[i][6]
+            };
+            break;
+          }
+        }
+
+        if (filaDel !== -1) {
+          sheetDel.getRange(filaDel, 11).setValue("APROBADO_FINAL");
+
+          const sheetNom = ss.getSheetByName("NOMINAS");
+          const rowsNom = sheetNom.getDataRange().getValues();
+          let alumnosAprobados = [];
+
+          for (let j = 1; j < rowsNom.length; j++) {
+            if (String(rowsNom[j][1]).trim().toUpperCase() === idDel) {
+              alumnosAprobados.push({
+                nombre: rowsNom[j][4],
+                apellido: rowsNom[j][5],
+                dni: rowsNom[j][6],
+                banca: rowsNom[j][3]
+              });
+            }
+          }
+
+          if (infoEscuela && infoEscuela.email) {
+            let listaHtml = "";
+            alumnosAprobados.forEach((a) => {
+              listaHtml += `<li><b>${a.nombre} ${a.apellido}</b> (DNI: ${a.dni}) — Banca: <i>${a.banca}</i></li>`;
+            });
+
+            const asunto = `¡Legajo Aprobado y Validado! - Modelos ONU (${idDel})`;
+            const cuerpoHtml = `
+              <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                <h2 style="color: #27ae60;">¡Documentación y Legajo Aprobados Finales!</h2>
+                <p>Estimado/a <b>${infoEscuela.responsable}</b>,</p>
+                <p>El equipo de secretariado ha auditado y aprobado de forma definitiva la documentación y los legajos de la institución <b>${infoEscuela.nombre}</b>.</p>
+                
+                <div style="background-color: #f4f6f9; padding: 15px; border-left: 4px solid #27ae60; margin: 20px 0;">
+                  <p style="margin: 0;"><b>Total de estudiantes acreditados en el evento:</b> ${alumnosAprobados.length}</p>
+                </div>
+
+                <h3 style="color: #2c3e50;">📋 Nómina y Bancas Aprobadas:</h3>
+                <ul>
+                  ${listaHtml}
+                </ul>
+
+                <p>¡Todo listo para el Modelo! Nos comunicaremos próximamente con las últimas novedades.</p>
+                <p>Atentamente,<br><b>Equipo de Secretariado - Modelos ONU</b></p>
+              </div>
+            `;
+            enviarMailSeguro(ss, infoEscuela.email, asunto, cuerpoHtml);
+          }
+
+          return responderJSON({ status: "SUCCESS", message: "Legajo aprobado y correo enviado correctamente." });
+        } else {
+          return responderJSON({ status: "ERROR", message: "Delegación no encontrada." });
+        }
+      }
+
+      if (action === "RECHAZAR_LEGAJO_ESCUELA") {
+        const sheetDel = ss.getSheetByName("DELEGACIONES");
+        const idDel = String(payload.data.id_delegacion).trim().toUpperCase();
+        const motivo = String(payload.data.motivo || "No especificado").trim();
+        
+        const rows = sheetDel.getDataRange().getValues();
+        let headerIdx = 0;
+        if (String(rows[0][0]).toLowerCase().includes("columna")) headerIdx = 1;
+        
+        const headers = rows[headerIdx].map(h => String(h).trim().toLowerCase());
+        const colIdIdx = headers.findIndex(h => h.includes("id_delegacion") || h.includes("id"));
+        const colEmailIdx = headers.findIndex(h => h.includes("docente_email") || h.includes("email"));
+        const colNomIdx = headers.findIndex(h => h.includes("docente_apellido") || h.includes("responsable"));
+        const colEscuelaIdx = headers.findIndex(h => h.includes("nombre_colegio") || h.includes("colegio"));
+        const colEstadoIdx = headers.findIndex(h => h.includes("estado"));
+
+        let filaDel = -1;
+        let infoEscuela = null;
+
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+          if (String(rows[i][colIdIdx >= 0 ? colIdIdx : 0]).trim().toUpperCase() === idDel) {
+            filaDel = i + 1;
+            infoEscuela = {
+              nombre: rows[i][colEscuelaIdx >= 0 ? colEscuelaIdx : 1],
+              responsable: rows[i][colNomIdx >= 0 ? colNomIdx : 5],
+              email: rows[i][colEmailIdx >= 0 ? colEmailIdx : 6]
+            };
+            break;
+          }
+        }
+
+        if (filaDel !== -1) {
+          if (colEstadoIdx >= 0) {
+            sheetDel.getRange(filaDel, colEstadoIdx + 1).setValue("RECHAZADO_LEGAJO");
+          }
+
+          if (infoEscuela && infoEscuela.email) {
+            const asunto = `Observaciones en su Legajo - Modelos ONU (${idDel})`;
+            const cuerpoHtml = `
+              <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                <h2 style="color: #c0392b;">⚠️ Observaciones en la Documentación</h2>
+                <p>Estimado/a <b>${infoEscuela.responsable}</b>,</p>
+                <p>El equipo de secretariado ha revisado la documentación y el legajo de la institución <b>${infoEscuela.nombre}</b>, y se requiere realizar correcciones.</p>
+                
+                <div style="background-color: #fadbd8; padding: 15px; border-left: 4px solid #c0392b; margin: 20px 0;">
+                  <p style="margin: 0;"><b>Motivo / Correcciones solicitadas:</b><br>${motivo}</p>
+                </div>
+
+                <p>Por favor, ingrese nuevamente a la plataforma para actualizar los datos o archivos correspondientes.</p>
+                <p>Atentamente,<br><b>Equipo de Secretariado - Modelos ONU</b></p>
+              </div>
+            `;
+            enviarMailSeguro(ss, infoEscuela.email, asunto, cuerpoHtml);
+          }
+
+          return responderJSON({ status: "SUCCESS", message: "Legajo rechazado y correo de notificación enviado." });
+        } else {
+          return responderJSON({ status: "ERROR", message: "Delegación no encontrada." });
+        }
+      }
+
+      return responderJSON({ status: "ERROR", message: "Acción no válida" });
+
+    } catch (err) {
+      return responderJSON({ status: "ERROR", message: err.toString() });
+    } finally {
+      lock.releaseLock();
+    }
+  } else {
+    return responderJSON({ status: "TIMEOUT", message: "Servidor ocupado." });
+  }
+}
+
+function enviarMailSeguro(ssParam, destinatario, asunto, cuerpoHtml) {
+  const ss = ssParam || SpreadsheetApp.getActiveSpreadsheet();
+  const sheetCola = ss.getSheetByName("COLA_MAILS");
+
+  try {
+    GmailApp.sendEmail(destinatario, asunto, "", { 
+      htmlBody: cuerpoHtml, 
+      name: "Secretariado - Modelos ONU" 
+    });
+  } catch (err) {
+    if (sheetCola) {
+      sheetCola.appendRow([destinatario, asunto, cuerpoHtml, new Date().toISOString()]);
+    }
+  }
+}
+
+function procesarColaMails(ss) {
+  const sheetCola = ss.getSheetByName("COLA_MAILS");
+  if (!sheetCola || sheetCola.getLastRow() < 2) return;
+
+  const rows = sheetCola.getDataRange().getValues();
+  let filasAEliminar = [];
+
+  for (let i = rows.length - 1; i >= 1; i--) {
+    try {
+      GmailApp.sendEmail(rows[i][0], rows[i][1], "", { 
+        htmlBody: rows[i][2], 
+        name: "Secretariado - Modelos ONU" 
+      });
+      filasAEliminar.push(i + 1);
+    } catch (e) {
+      break;
+    }
+  }
+
+  filasAEliminar.sort((a, b) => b - a).forEach(fila => sheetCola.deleteRow(fila));
+}
+
+function registrarDelegacion(ss, data) {
+  const sheet = ss.getSheetByName("DELEGACIONES");
+  const idDelegacion = "DEL-" + String(sheet.getLastRow()).padStart(3, '0');
+  
+  sheet.appendRow([
+    idDelegacion, data.nombre_colegio, data.direccion_escuela, data.email_institucional, data.telefono_institucional, data.docente_apellido_nombre, data.docente_email, data.docente_telefono, data.secret_hash, data.cupos_solicitados, "REGISTRADO", data.desglose_modalidades || "", data.id_modelo || "GENERAL", data.docentes_acompanantes || 1, ""
+  ]);
+
+  const cuerpoHtml = `
+    <div style="font-family: Arial, sans-serif; color: #333;">
+      <h2 style="color: #0b5394;">¡Preinscripción Exitosa!</h2>
+      <p>Estimado/a <b>${data.docente_apellido_nombre}</b>,</p>
+      <p>Su institución <b>${data.nombre_colegio}</b> se registró correctamente.</p>
+      <p><b>Código de Delegación:</b> <span style="color: #d9534f; font-size:16px;">${idDelegacion}</span></p>
+      <p><b>Clave de Acceso:</b> ${data.secret_hash}</p>
+    </div>
+  `;
+  enviarMailSeguro(ss, data.docente_email, `Preinscripción Exitosa - ${idDelegacion}`, cuerpoHtml);
+  return { id_delegacion: idDelegacion };
+}
+
+function obtenerDatosTabla(sheet) {
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length < 2) return [];
+  let headerIndex = 0;
+  if (String(rows[0][0]).toLowerCase().includes("columna")) headerIndex = 1;
+  if (rows.length <= headerIndex + 1) return [];
+
+  const headers = rows[headerIndex];
+  return rows.slice(headerIndex + 1).map(row => {
+    let obj = {};
+    headers.forEach((h, i) => { if (h) obj[String(h).trim()] = row[i]; });
+    return obj;
+  });
+}
+
+function responderJSON(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function importarAsignacionesDesdeExcel() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const idModeloDefault = "MONUCBA";
+
+  const sheetOrigen = ss.getSheetByName("ASIGNACIONES_EXCEL");
+  if (!sheetOrigen) return;
+
+  const sheetOrganos = ss.getSheetByName("ORGANOS");
+  const rowsOrganos = sheetOrganos.getDataRange().getValues();
+  
+  const organosMatriz = [];
+  for (let i = 1; i < rowsOrganos.length; i++) {
+    const r = rowsOrganos[i];
+    if (r[1] || r[2]) {
+      organosMatriz.push({
+        fila: i + 1,
+        id_modelo: String(r[0] || idModeloDefault).trim(),
+        pais: String(r[1] || r[2] || "").trim(),
+        organo_comite: String(r[2] || r[1] || "").trim(),
+        integrantes_totales: parseInt(r[3]) || 1
+      });
+    }
+  }
+
+  function normalizarTexto(txt) {
+    return String(txt || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  const sheetDel = ss.getSheetByName("DELEGACIONES");
+  const delegaciones = obtenerDatosTabla(sheetDel);
+  const mapaEscuelas = {};
+  
+  delegaciones.forEach(d => {
+    const nom = d.nombre_colegio || d.escuela || d.institucion;
+    if (nom) mapaEscuelas[normalizarTexto(nom)] = String(d.id_delegacion).trim().toUpperCase();
+  });
+
+  const rowsOrigen = sheetOrigen.getDataRange().getValues();
+  let sheetAsig = ss.getSheetByName("ASIGNACIONES");
+  if (!sheetAsig) sheetAsig = ss.insertSheet("ASIGNACIONES");
+  sheetAsig.clear();
+
+  let filasAsignaciones = [["id_asignacion", "organo", "pais", "id_delegacion_asignada", "id_modelo"]];
+  let contadorAsig = 1;
+
+  sheetOrganos.getRange("E2:E").clearContent();
+
+  for (let i = 1; i < rowsOrigen.length; i++) {
+    const val1 = String(rowsOrigen[i][0] || "").trim();
+    const val2 = String(rowsOrigen[i][1] || "").trim();
+
+    if (!val1 || !val2 || val1.toLowerCase().includes("colegio") || val1.toLowerCase().includes("pais")) continue;
+
+    let colegioRaw = val1;
+    let paisRaw = val2;
+
+    if (mapaEscuelas[normalizarTexto(val2)] || !mapaEscuelas[normalizarTexto(val1)]) {
+      colegioRaw = val2;
+      paisRaw = val1;
+    }
+
+    const idDel = mapaEscuelas[normalizarTexto(colegioRaw)] || colegioRaw;
+    const paisLimpio = paisRaw.replace(/\s*\(\d+\)/g, "").replace(/\s+\d+$/g, "").trim();
+
+    const comitesDelPais = organosMatriz.filter(o => normalizarTexto(o.pais) === normalizarTexto(paisLimpio));
+
+    if (comitesDelPais.length > 0) {
+      comitesDelPais.forEach(item => {
+        const cantBancas = parseInt(item.integrantes_totales) || 1;
+        const nombreComite = item.organo_comite;
+
+        for (let b = 1; b <= cantBancas; b++) {
+          const etiqueta = cantBancas > 1 ? `${nombreComite} (Banca ${b})` : nombreComite;
+          const idAsig = "ASIG-" + String(contadorAsig++).padStart(4, '0');
+          
+          filasAsignaciones.push([idAsig, etiqueta, item.pais, idDel, item.id_modelo]);
+          sheetOrganos.getRange(item.fila, 5).setValue(idAsig);
+        }
+      });
+    } else {
+      const idAsig = "ASIG-" + String(contadorAsig++).padStart(4, '0');
+      filasAsignaciones.push([idAsig, "Representación Asignada", paisLimpio, idDel, idModeloDefault]);
+    }
+  }
+
+  if (filasAsignaciones.length > 1) {
+    sheetAsig.getRange(1, 1, filasAsignaciones.length, 5).setValues(filasAsignaciones);
+  }
+
+  Logger.log(`✅ [Importación Exitosa] Solapas sincronizadas correctamente.`);
+}"
 
 @st.cache_data(ttl=60)
 def cargar_modelos_activos():
