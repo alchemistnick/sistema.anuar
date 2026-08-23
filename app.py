@@ -183,7 +183,6 @@ elif menu == "📋 Carga de Nómina y Documentación":
         btn_verificar = st.form_submit_button("Verificar Estado y Cupos")
 
     if id_del_nom and hash_nom:
-        # Validar credenciales y obtener datos de la escuela y cupos
         delegaciones = api_get("GET_TODAS_DELEGACIONES")
         escuela = next((d for d in delegaciones if str(d.get("id_delegacion")).strip().upper() == id_del_nom and str(d.get("secret_hash")).strip() == hash_nom), None)
 
@@ -220,8 +219,17 @@ elif menu == "📋 Carga de Nómina y Documentación":
             else:
                 st.markdown("### ➕ Registrar Nuevo Participante")
                 with st.form("form_agregar_participante"):
-                    id_asignacion_alum = st.text_input("ID de Asignación (Ej: ASIG-0001 proporcionado por secretaría):").strip()
-                    rol_mnu = st.text_input("Rol / Cargo o Comisión (Ej: Embajador - Bahrein):")
+                    
+                    # Si tiene bancas asignadas, permitimos seleccionarla de la lista
+                    if bancas_asignadas:
+                        dict_bancas = {f"{b.get('organo')} — {b.get('pais')} (ID: {b.get('id_asignacion')})": b.get('id_asignacion') for b in bancas_asignadas}
+                        banca_sel = st.selectbox("Seleccionar Banca / Representación Asignada:", list(dict_bancas.keys()))
+                        id_asignacion_alum = dict_bancas[banca_sel]
+                        rol_mnu = st.selectbox("Rol en el Órgano:", ["Delegado/a", "Embajador/a", "Autoridad"])
+                    else:
+                        id_asignacion_alum = "-"
+                        rol_mnu = st.text_input("Rol / Cargo o Comisión (Ej: Embajador - Bahrein):")
+
                     nombre = st.text_input("Nombre:")
                     apellido = st.text_input("Apellido:")
                     dni = st.text_input("DNI:")
