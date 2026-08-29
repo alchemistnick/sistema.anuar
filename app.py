@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide",
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbyVCSQXsfeI-6nbzBXmQwT9k-j8efcS9QE51m6QN3ZRrHCI_zb5CiwnuF9Kc50Vr6rUKQ/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbzbPKv-DdELuHy2FugQ3s6ZENEU1gUwFiDaK05r2t6qaqaUND7bmNqfwOsePnPNYb_hJQ/exec"
 
 
 def api_get(action, params=""):
@@ -35,7 +35,7 @@ menu = st.sidebar.selectbox(
 )
 
 # ---------------------------------------------------------
-# 1. PREINSCRIPCIÓN INSTITUCIONAL POR SECCIONES REALES
+# PREINSCRIPCIÓN INSTITUCIONAL CON LÍMITES MÁXIMOS DESDE EXCEL
 # ---------------------------------------------------------
 if menu == "📝 Preinscripción Institucional":
     st.subheader("📝 Formulario de Preinscripción Escolar")
@@ -55,7 +55,7 @@ if menu == "📝 Preinscripción Institucional":
     modelo_objeto = dict_mods_full[mod_sel]
     id_modelo_elegido = modelo_objeto.get("id_modelo")
 
-    # Cargar comités parametrizados para este modelo
+    # Cargar comités parametrizados
     comites = api_get(
         "GET_PARAMETROS_COMITES", f"&id_modelo={id_modelo_elegido}"
     )
@@ -116,15 +116,26 @@ if menu == "📝 Preinscripción Institucional":
                     ]
                 )
 
+                # Obtener el máximo configurado en Excel para esta sección (por defecto 4)
+                max_permiso = 4
+                for x in lista_comites:
+                    val_max = x.get("max_delegaciones_seccion")
+                    if val_max is not None and str(val_max).isdigit():
+                        max_permiso = int(val_max)
+                        break
+
+                # Opciones dinámicas de 0 hasta el máximo permitido
+                opciones_cant = list(range(0, max_permiso + 1))
+
                 with col_sec:
                     st.write(
                         f"**Sección {sec_nombre}:** {nombres_comites} "
-                        f"(*{integrantes_totales} participantes por delegación*)"
+                        f"(*{integrantes_totales} participantes por delegación - Máx: {max_permiso}*)"
                     )
                 with col_cant:
                     cant = st.selectbox(
                         f"Cantidad ({sec_nombre}):",
-                        options=[0, 1, 2, 3, 4],
+                        options=opciones_cant,
                         key=f"sec_{sec_nombre}",
                     )
                     if cant > 0:
@@ -177,7 +188,6 @@ if menu == "📝 Preinscripción Institucional":
                     )
                 else:
                     st.error(res.get("message"))
-
 # ---------------------------------------------------------
 # 2. INGRESO A MI DELEGACIÓN
 # ---------------------------------------------------------
