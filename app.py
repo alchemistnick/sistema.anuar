@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-API_URL = "https://script.google.com/macros/s/AKfycbz4DTBM7bbZ2RvD0rSyBAgTgPOZMsjbwgmSdwT0VbuLGj27RGgksHKv8fapiM4q1dcvEg/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbzbPKv-DdELuHy2FugQ3s6ZENEU1gUwFiDaK05r2t6qaqaUND7bmNqfwOsePnPNYb_hJQ/exec"
 
 
 def api_get(action, params=""):
@@ -25,7 +25,6 @@ def api_get(action, params=""):
 
 st.title("🏫 Portal de Instituciones - Modelos ONU")
 
-# 🎛️ INTERRUPTOR DE MODO EVENTO
 MODO_SOLO_ACREDITACION = False
 
 if MODO_SOLO_ACREDITACION:
@@ -54,10 +53,6 @@ if menu == "🎫 Acreditación Presencial":
         st.stop()
 
     st.subheader("🎫 Terminal de Acreditación - Modelos ONU")
-    st.write(
-        "Seleccione el Modelo correspondiente e ingrese el DNI del participante para validar su ingreso."
-    )
-
     modelos = api_get("GET_MODELOS_ACTIVOS")
     if not modelos:
         st.warning("⚠️ No hay modelos activos configurados.")
@@ -107,7 +102,7 @@ if menu == "🎫 Acreditación Presencial":
                         st.error(f"Error de conexión: {e}")
 
 # ---------------------------------------------------------
-# 2. PREINSCRIPCIÓN INSTITUCIONAL (CON REGLAS DE DELEGACIÓN DESDE GOOGLE SHEETS)
+# 2. PREINSCRIPCIÓN INSTITUCIONAL
 # ---------------------------------------------------------
 elif menu == "📝 Preinscripción Institucional":
     st.subheader("📝 Formulario de Preinscripción Escolar")
@@ -117,7 +112,6 @@ elif menu == "📝 Preinscripción Institucional":
         st.warning("⚠️ No hay modelos activos configurados.")
         st.stop()
 
-    # Mapeo completo de objetos del modelo para extraer reglas
     dict_mods_full = {m["nombre_visible"]: m for m in modelos}
     mod_sel = st.selectbox(
         "Seleccionar Modelo ONU:", list(dict_mods_full.keys())
@@ -126,10 +120,8 @@ elif menu == "📝 Preinscripción Institucional":
     modelo_objeto = dict_mods_full[mod_sel]
     id_modelo_elegido = modelo_objeto.get("id_modelo")
 
-    # Extraer límites de delegaciones configurados en la planilla (con valores por defecto si no están definidos)
     min_delegaciones = int(modelo_objeto.get("min_delegaciones", 1))
     max_delegaciones = int(modelo_objeto.get("max_delegaciones", 5))
-    alumnos_por_del = int(modelo_objeto.get("alumnos_por_delegacion", 1))
 
     st.info(
         f"ℹ️ **Reglas de este Modelo:** Permite entre **{min_delegaciones}** y **{max_delegaciones}** delegaciones por institución."
@@ -152,19 +144,12 @@ elif menu == "📝 Preinscripción Institucional":
             docente_email = st.text_input("Email del Docente:")
             docente_telefono = st.text_input("Celular del Docente:")
 
-            # Campo dinámico ajustado según límites del Sheets
             cantidad_delegaciones = st.number_input(
                 "Cantidad de Delegaciones Solicitadas:",
                 min_value=min_delegaciones,
                 max_value=max_delegaciones,
                 value=min_delegaciones,
                 step=1,
-            )
-
-            # Cálculo sugerido de cupos/alumnos
-            cupos_calculados = cantidad_delegaciones * alumnos_por_del
-            st.caption(
-                f"👥 Total de cupos para estudiantes estimado: **{cupos_calculados}**."
             )
 
             docentes_acompanantes = st.number_input(
@@ -188,8 +173,7 @@ elif menu == "📝 Preinscripción Institucional":
                         "docente_apellido_nombre": docente_apellido_nombre,
                         "docente_email": docente_email,
                         "docente_telefono": docente_telefono,
-                        "cantidad_delegaciones": cantidad_delegaciones,
-                        "cupos_solicitados": cupos_calculados,
+                        "cupos_solicitados": cantidad_delegaciones,
                         "docentes_acompanantes": docentes_acompanantes,
                         "secret_hash": secret_hash,
                         "id_modelo": id_modelo_elegido,
@@ -279,10 +263,11 @@ elif menu == "💳 Subir Comprobante de Pago":
                     st.error(res.get("message"))
 
 # ---------------------------------------------------------
-# 5. CARGA DE NÓMINA Y DOCUMENTACIÓN
+# 5. CARGA DE NÓMINA Y DOCUMENTACIÓN (CON PARAMETROS_COMITES)
 # ---------------------------------------------------------
 elif menu == "📋 Carga de Nómina y Documentación":
     st.subheader("📋 Registro de Participantes y Documentación")
+
     with st.form("form_verif_nomina"):
         id_del_nom = st.text_input("Código de Delegación:").strip().upper()
         hash_nom = st.text_input("Clave de Acceso:", type="password").strip()
@@ -293,6 +278,7 @@ elif menu == "📋 Carga de Nómina y Documentación":
     if "id_del_nom" in st.session_state and st.session_state["id_del_nom"]:
         id_del_nom = st.session_state["id_del_nom"]
         hash_nom = st.session_state.get("hash_nom", "")
+
         delegaciones = api_get("GET_TODAS_DELEGACIONES")
         escuela = next(
             (
@@ -303,51 +289,138 @@ elif menu == "📋 Carga de Nómina y Documentación":
             ),
             None,
         )
+
         if escuela:
+            id_modelo = escuela.get("id_modelo", "MONUCBA")
+
+            # 1. Obtener las asignaciones/bancas
             res_asig = requests.get(
                 f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_del_nom}"
             ).json()
             bancas_asignadas = res_asig.get("data", [])
-            tab_est, tab_doc = st.tabs(["👨‍🎓 Estudiante", "👨‍🏫 Docente"])
+
+            # 2. Consultar PARAMETROS_COMITES desde Sheets
+            comites_reglas = api_get(
+                "GET_PARAMETROS_COMITES", f"&id_modelo={id_modelo}"
+            )
+            mapa_reglas = {
+                str(c.get("organo_comite")).strip().upper(): c
+                for c in comites_reglas
+            }
+
+            tab_est, tab_doc = st.tabs(
+                ["👨‍🎓 Estudiantes (Delegados)", "👨‍🏫 Docentes"]
+            )
 
             with tab_est:
-                with st.form("form_est"):
-                    dict_bancas = (
-                        {
-                            f"{b.get('organo')} — {b.get('pais')}": b.get(
-                                "id_asignacion"
-                            )
-                            for b in bancas_asignadas
-                        }
-                        if bancas_asignadas
-                        else {"Sin Asignación": "-"}
+                if not bancas_asignadas:
+                    st.warning(
+                        "⚠️ Tu institución aún no tiene bancas/países asignados."
                     )
-                    banca_sel = st.selectbox("Banca:", list(dict_bancas.keys()))
-                    id_asig = dict_bancas[banca_sel]
-                    nombre = st.text_input("Nombre:")
-                    apellido = st.text_input("Apellido:")
-                    dni = st.text_input("DNI:")
-                    if st.form_submit_button("Guardar"):
-                        payload = {
-                            "action": "GUARDAR_PARTICIPANTE_NOMINA",
-                            "data": {
-                                "id_delegacion": id_del_nom,
-                                "secret_hash": hash_nom,
-                                "id_asignacion": id_asig,
-                                "rol_mnu": "Delegado/a",
-                                "nombre": nombre,
-                                "apellido": apellido,
-                                "dni": dni,
-                                "alergias_medicas": "Ninguna",
-                                "ficha_b64": "",
-                                "ficha_name": "",
-                                "ficha_mime": "",
-                                "aut_b64": "",
-                                "aut_name": "",
-                                "aut_mime": "",
-                            },
-                        }
-                        res = requests.post(API_URL, json=payload).json()
-                        if res.get("status") == "SUCCESS":
-                            st.success("Guardado")
-                            st.rerun()
+                else:
+                    dict_bancas = {
+                        f"{b.get('organo')} — {b.get('pais')}": b
+                        for b in bancas_asignadas
+                    }
+                    banca_sel_nombre = st.selectbox(
+                        "Seleccionar Banca / Asignación:",
+                        list(dict_bancas.keys()),
+                    )
+                    banca_objeto = dict_bancas[banca_sel_nombre]
+
+                    organo_banca = (
+                        str(banca_objeto.get("organo")).strip().upper()
+                    )
+                    regla_comite = mapa_reglas.get(organo_banca, {})
+
+                    # Extraer parámetros dinámicos según las columnas exactas del excel
+                    integrantes_permitidos = int(
+                        regla_comite.get("integrantes_por_banca", 2)
+                    )
+                    requiere_marca = str(
+                        regla_comite.get("requiere_marca", "TRUE")
+                    ).upper() in ["TRUE", "1", "SI"]
+
+                    st.info(
+                        f"📌 El órgano **{banca_objeto.get('organo')}** permite hasta **{integrantes_permitidos} estudiante(s)** por banca."
+                    )
+
+                    with st.form("form_estudiante"):
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            nombre = st.text_input("Nombre del Estudiante:")
+                            apellido = st.text_input("Apellido:")
+                            dni = st.text_input("DNI:")
+                        with col_b:
+                            alergias = st.text_input(
+                                "Alergias / Condición Médica:", value="Ninguna"
+                            )
+                            ficha_med = st.file_uploader(
+                                "Ficha Médica (PDF/JPG):",
+                                type=["pdf", "png", "jpg"],
+                            )
+                            aut_firmada = st.file_uploader(
+                                "Autorización Firmada (PDF/JPG):",
+                                type=["pdf", "png", "jpg"],
+                            )
+
+                        btn_guardar = st.form_submit_button(
+                            "Guardar Alumno en Nómina"
+                        )
+
+                        if btn_guardar:
+                            if not nombre or not apellido or not dni:
+                                st.error("Completa los datos obligatorios.")
+                            else:
+                                f_b64, f_name, f_mime = "", "", ""
+                                a_b64, a_name, a_mime = "", "", ""
+
+                                if ficha_med:
+                                    f_b64 = base64.b64encode(
+                                        ficha_med.read()
+                                    ).decode("utf-8")
+                                    f_name, f_mime = (
+                                        ficha_med.name,
+                                        ficha_med.type,
+                                    )
+
+                                if aut_firmada:
+                                    a_b64 = base64.b64encode(
+                                        aut_firmada.read()
+                                    ).decode("utf-8")
+                                    a_name, a_mime = (
+                                        aut_firmada.name,
+                                        aut_firmada.type,
+                                    )
+
+                                payload = {
+                                    "action": "GUARDAR_PARTICIPANTE_NOMINA",
+                                    "data": {
+                                        "id_delegacion": id_del_nom,
+                                        "secret_hash": hash_nom,
+                                        "id_asignacion": banca_objeto.get(
+                                            "id_asignacion"
+                                        ),
+                                        "rol_mnu": "Delegado/a",
+                                        "nombre": nombre,
+                                        "apellido": apellido,
+                                        "dni": dni,
+                                        "alergias_medicas": alergias,
+                                        "ficha_b64": f_b64,
+                                        "ficha_name": f_name,
+                                        "ficha_mime": f_mime,
+                                        "aut_b64": a_b64,
+                                        "aut_name": a_name,
+                                        "aut_mime": a_mime,
+                                    },
+                                }
+                                res = requests.post(
+                                    API_URL, json=payload
+                                ).json()
+                                if res.get("status") == "SUCCESS":
+                                    st.success(
+                                        "✅ Estudiante registrado con éxito."
+                                    )
+                                    st.rerun()
+                                else:
+                                    st.error(res.get("message"))
