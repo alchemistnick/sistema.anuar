@@ -35,7 +35,7 @@ menu = st.sidebar.selectbox(
 )
 
 # ---------------------------------------------------------
-# PREINSCRIPCIÓN INSTITUCIONAL CON LÍMITES MÁXIMOS DESDE EXCEL
+# PREINSCRIPCIÓN INSTITUCIONAL
 # ---------------------------------------------------------
 if menu == "📝 Preinscripción Institucional":
     st.subheader("📝 Formulario de Preinscripción Escolar")
@@ -55,7 +55,6 @@ if menu == "📝 Preinscripción Institucional":
     modelo_objeto = dict_mods_full[mod_sel]
     id_modelo_elegido = modelo_objeto.get("id_modelo")
 
-    # Cargar comités parametrizados
     comites = api_get(
         "GET_PARAMETROS_COMITES", f"&id_modelo={id_modelo_elegido}"
     )
@@ -92,7 +91,6 @@ if menu == "📝 Preinscripción Institucional":
         total_cupos_calculados = 0
 
         if comites:
-            # Agrupar por clave_seccion
             secciones = {}
             for c in comites:
                 sec = str(c.get("clave_seccion", "GENERAL")).strip()
@@ -116,7 +114,6 @@ if menu == "📝 Preinscripción Institucional":
                     ]
                 )
 
-                # Obtener el máximo configurado en Excel para esta sección (por defecto 4)
                 max_permiso = 4
                 for x in lista_comites:
                     val_max = x.get("max_delegaciones_seccion")
@@ -124,8 +121,7 @@ if menu == "📝 Preinscripción Institucional":
                         max_permiso = int(val_max)
                         break
 
-                # Opciones dinámicas de 0 hasta el máximo permitido
-                opciones_cant = list(range(0, max_permiso + 1))
+                oppciones_cant = list(range(0, max_permiso + 1))
 
                 with col_sec:
                     st.write(
@@ -135,7 +131,7 @@ if menu == "📝 Preinscripción Institucional":
                 with col_cant:
                     cant = st.selectbox(
                         f"Cantidad ({sec_nombre}):",
-                        options=opciones_cant,
+                        options=oppciones_cant,
                         key=f"sec_{sec_nombre}",
                     )
                     if cant > 0:
@@ -188,17 +184,14 @@ if menu == "📝 Preinscripción Institucional":
                     )
                 else:
                     st.error(res.get("message"))
+
 # ---------------------------------------------------------
-# 2. INGRESO A MI DELEGACIÓN
+# INGRESO A MI DELEGACIÓN
 # ---------------------------------------------------------
 elif menu == "🔑 Ingreso a Mi Delegación":
     st.subheader("🔑 Estado de mi Institución y Asignaciones")
     with st.form("form_login_escuela"):
-        id_del_ingresado = (
-            st.text_input("Código de Delegación (Ej: DEL-001):")
-            .strip()
-            .upper()
-        )
+        email_doc = st.text_input("Email del Docente Responsable:").strip()
         hash_ingresado = st.text_input(
             "Clave de Acceso:", type="password"
         ).strip()
@@ -208,8 +201,8 @@ elif menu == "🔑 Ingreso a Mi Delegación":
                 (
                     d
                     for d in delegaciones
-                    if str(d.get("id_delegacion")).strip().upper()
-                    == id_del_ingresado
+                    if str(d.get("docente_email")).strip().lower()
+                    == email_doc.lower()
                     and str(d.get("secret_hash")).strip() == hash_ingresado
                 ),
                 None,
@@ -217,23 +210,24 @@ elif menu == "🔑 Ingreso a Mi Delegación":
             if escuela:
                 st.success("¡Acceso correcto!")
                 st.markdown(f"### 🏛️ {escuela.get('nombre_colegio')}")
+                id_del = escuela.get("id_delegacion")
                 res_asig = requests.get(
-                    f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_del_ingresado}"
+                    f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_del}"
                 ).json()
                 for b in res_asig.get("data", []):
                     st.write(
                         f"- **{b.get('organo')}** — País: **{b.get('pais')}** (`ID: {b.get('id_asignacion')}`)"
                     )
             else:
-                st.error("Datos incorrectos.")
+                st.error("Email o clave incorrecta.")
 
 # ---------------------------------------------------------
-# 3. SUBIR COMPROBANTE DE PAGO
+# SUBIR COMPROBANTE DE PAGO
 # ---------------------------------------------------------
 elif menu == "💳 Subir Comprobante de Pago":
     st.subheader("💳 Subir Comprobante de Pago")
     with st.form("form_pago"):
-        id_del_pago = st.text_input("Código de Delegación:").strip().upper()
+        email_doc = st.text_input("Email del Docente Responsable:").strip()
         hash_pago = st.text_input("Clave de Acceso:", type="password").strip()
         monto_pago = st.number_input(
             "Monto Abonado ($):", min_value=0.0, format="%.2f"
@@ -242,42 +236,61 @@ elif menu == "💳 Subir Comprobante de Pago":
             "Comprobante:", type=["pdf", "png", "jpg", "jpeg"]
         )
         if st.form_submit_button("Enviar Comprobante"):
-            if not id_del_pago or not hash_pago or not archivo_pago:
+            if not email_doc or not hash_pago or not archivo_pago:
                 st.error("Completa todos los campos.")
             else:
-                b64 = base64.b64encode(archivo_pago.read()).decode("utf-8")
-                payload = {
-                    "action": "SUBIR_COMPROBANTE_PAGO",
-                    "data": {
-                        "id_delegacion": id_del_pago,
-                        "secret_hash": hash_pago,
-                        "monto": monto_pago,
-                        "file_base64": b64,
-                        "file_name": archivo_pago.name,
-                        "file_mime": archivo_pago.type,
-                    },
-                }
-                res = requests.post(API_URL, json=payload).json()
-                if res.get("status") == "SUCCESS":
-                    st.success("¡Comprobante subido!")
+                delegaciones = api_get("GET_TODAS_DELEGACIONES")
+                escuela = next(
+                    (
+                        d
+                        for d in delegaciones
+                        if str(d.get("docente_email")).strip().lower()
+                        == email_doc.lower()
+                        and str(d.get("secret_hash")).strip() == hash_pago
+                    ),
+                    None,
+                )
+                if not escuela:
+                    st.error("Email o clave de acceso incorrecta.")
                 else:
-                    st.error(res.get("message"))
+                    b64 = base64.b64encode(archivo_pago.read()).decode("utf-8")
+                    payload = {
+                        "action": "SUBIR_COMPROBANTE_PAGO",
+                        "data": {
+                            "id_delegacion": escuela.get("id_delegacion"),
+                            "secret_hash": hash_pago,
+                            "monto": monto_pago,
+                            "file_base64": b64,
+                            "file_name": archivo_pago.name,
+                            "file_mime": archivo_pago.type,
+                        },
+                    }
+                    res = requests.post(API_URL, json=payload).json()
+                    if res.get("status") == "SUCCESS":
+                        st.success("¡Comprobante subido con éxito!")
+                    else:
+                        st.error(res.get("message"))
 
 # ---------------------------------------------------------
-# 4. CARGA DE NÓMINA Y DOCUMENTACIÓN
+# CARGA DE NÓMINA Y DOCUMENTACIÓN (CON EMAIL Y BOTÓN FINAL)
 # ---------------------------------------------------------
 elif menu == "📋 Carga de Nómina y Documentación":
     st.subheader("📋 Registro de Participantes y Documentación")
 
+    # Ingreso simplificado con Email y Contraseña
     with st.form("form_verif_nomina"):
-        id_del_nom = st.text_input("Código de Delegación:").strip().upper()
+        st.markdown("### 🔑 Acceso al Legajo Escolar")
+        email_doc_nom = st.text_input("Email del Docente Responsable:").strip()
         hash_nom = st.text_input("Clave de Acceso:", type="password").strip()
-        if st.form_submit_button("Verificar"):
-            st.session_state["id_del_nom"] = id_del_nom
+        if st.form_submit_button("Ingresar a Carga de Nómina"):
+            st.session_state["email_doc_nom"] = email_doc_nom
             st.session_state["hash_nom"] = hash_nom
 
-    if "id_del_nom" in st.session_state and st.session_state["id_del_nom"]:
-        id_del_nom = st.session_state["id_del_nom"]
+    if (
+        "email_doc_nom" in st.session_state
+        and st.session_state["email_doc_nom"]
+    ):
+        email_doc_nom = st.session_state["email_doc_nom"]
         hash_nom = st.session_state.get("hash_nom", "")
 
         delegaciones = api_get("GET_TODAS_DELEGACIONES")
@@ -285,14 +298,24 @@ elif menu == "📋 Carga de Nómina y Documentación":
             (
                 d
                 for d in delegaciones
-                if str(d.get("id_delegacion")).strip().upper() == id_del_nom
+                if str(d.get("docente_email")).strip().lower()
+                == email_doc_nom.lower()
                 and str(d.get("secret_hash")).strip() == hash_nom
             ),
             None,
         )
 
-        if escuela:
+        if not escuela:
+            st.error(
+                "❌ Email o contraseña incorrecta. Verifica tus datos de ingreso."
+            )
+        else:
+            id_del_nom = escuela.get("id_delegacion")
             id_modelo = escuela.get("id_modelo", "GENERAL")
+
+            st.success(
+                f"🏛️ **Institución:** {escuela.get('nombre_colegio')} (`{id_del_nom}`)"
+            )
 
             res_asig = requests.get(
                 f"{API_URL}?action=GET_ASIGNACIONES_DELEGACION&id_delegacion={id_del_nom}"
@@ -309,7 +332,7 @@ elif menu == "📋 Carga de Nómina y Documentación":
 
             if not bancas_asignadas:
                 st.warning(
-                    "⚠️ Tu institución aún no tiene bancas/países asignados."
+                    "⚠️ Tu institución aún no tiene bancas/países asignados por la organización."
                 )
             else:
                 dict_bancas = {
@@ -317,21 +340,22 @@ elif menu == "📋 Carga de Nómina y Documentación":
                     for b in bancas_asignadas
                 }
                 banca_sel_nombre = st.selectbox(
-                    "Seleccionar Banca / Asignación:", list(dict_bancas.keys())
+                    "Seleccionar Banca / Asignación para cargar participante:",
+                    list(dict_bancas.keys()),
                 )
                 banca_objeto = dict_bancas[banca_sel_nombre]
 
                 organo_banca = str(banca_objeto.get("organo")).strip().upper()
                 regla_comite = mapa_reglas.get(organo_banca, {})
-
                 integrantes_permitidos = int(
                     regla_comite.get("integrantes_por_banca", 2)
                 )
 
                 st.info(
-                    f"📌 El órgano **{banca_objeto.get('organo')}** permite hasta **{integrantes_permitidos} estudiante(s)** por país."
+                    f"📌 El órgano **{banca_objeto.get('organo')}** permite hasta **{integrantes_permitidos} estudiante(s)**."
                 )
 
+                # Formulario individual de participante
                 with st.form("form_estudiante"):
                     col_a, col_b = st.columns(2)
                     with col_a:
@@ -345,14 +369,35 @@ elif menu == "📋 Carga de Nómina y Documentación":
                         ficha_med = st.file_uploader(
                             "Ficha Médica (PDF/JPG):", type=["pdf", "png", "jpg"]
                         )
+                        if ficha_med:
+                            st.caption(
+                                f"📄 Archivo seleccionado: **{ficha_med.name}**"
+                            )
+
                         aut_firmada = st.file_uploader(
                             "Autorización Firmada (PDF/JPG):",
                             type=["pdf", "png", "jpg"],
                         )
+                        if aut_firmada:
+                            st.caption(
+                                f"📄 Archivo seleccionado: **{aut_firmada.name}**"
+                            )
 
-                    if st.form_submit_button("Guardar Alumno en Nómina"):
+                    # Campo adicional de comentarios por participante
+                    comentarios_participante = st.text_area(
+                        "Comentarios / Observaciones sobre este participante (opcional):",
+                        placeholder="Escriba aquí aclaraciones médicas, de documentación o generales...",
+                    )
+
+                    btn_guardar = st.form_submit_button(
+                        "💾 Guardar Participante en Nómina"
+                    )
+
+                    if btn_guardar:
                         if not nombre or not apellido or not dni:
-                            st.error("Completa los datos obligatorios.")
+                            st.error(
+                                "Por favor completa Nombre, Apellido y DNI."
+                            )
                         else:
                             f_b64, f_name, f_mime = "", "", ""
                             a_b64, a_name, a_mime = "", "", ""
@@ -385,6 +430,7 @@ elif menu == "📋 Carga de Nómina y Documentación":
                                     "apellido": apellido,
                                     "dni": dni,
                                     "alergias_medicas": alergias,
+                                    "comentarios": comentarios_participante,
                                     "ficha_b64": f_b64,
                                     "ficha_name": f_name,
                                     "ficha_mime": f_mime,
@@ -396,8 +442,60 @@ elif menu == "📋 Carga de Nómina y Documentación":
                             res = requests.post(API_URL, json=payload).json()
                             if res.get("status") == "SUCCESS":
                                 st.success(
-                                    "✅ Estudiante registrado con éxito."
+                                    f"✅ ¡{nombre} {apellido} guardado/a con éxito! Documentación registrada."
                                 )
                                 st.rerun()
                             else:
                                 st.error(res.get("message"))
+
+                # ---------------------------------------------------------
+                # SECCIÓN Y BOTÓN FINAL DE CONFIRMACIÓN TOTAL
+                # ---------------------------------------------------------
+                st.markdown("---")
+                st.markdown("### 🚨 Cierre Oficial de Carga")
+                st.warning(
+                    "⚠️ **IMPORTANTE:** Una vez que haya cargado a **TODOS** los estudiantes de **TODAS** sus delegaciones asignadas, presione el botón inferior para notificar al Secretariado."
+                )
+
+                st.markdown(
+                    """
+                    <style>
+                    div.stButton > button:first-child {
+                        background-color: #D32F2F !important;
+                        color: white !important;
+                        font-size: 18px !important;
+                        font-weight: bold !important;
+                        padding: 15px 25px !important;
+                        border-radius: 8px !important;
+                        border: none !important;
+                        width: 100% !important;
+                    }
+                    div.stButton > button:first-child:hover {
+                        background-color: #B71C1C !important;
+                        color: white !important;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_style_scheme=True,
+                )
+
+                if st.button(
+                    "🔴 CONFIRMAR CARGA COMPLETA DE TODA LA DELEGACIÓN (APRETAR SOLO UNA VEZ SUBIDA TODA LA DOCUMENTACIÓN)"
+                ):
+                    payload = {
+                        "action": "CONFIRMAR_CARGA_DOCUMENTACION",
+                        "data": {
+                            "id_delegacion": id_del_nom,
+                            "secret_hash": hash_nom,
+                            "email_docente": email_doc_nom,
+                        },
+                    }
+                    res = requests.post(API_URL, json=payload).json()
+                    if res.get("status") == "SUCCESS":
+                        st.balloons()
+                        st.success(
+                            "🎉 **¡Carga de documentación confirmada con éxito!** "
+                            "Se ha enviado un correo electrónico de confirmación a su casilla con la constancia de recepción."
+                        )
+                    else:
+                        st.error(res.get("message"))
