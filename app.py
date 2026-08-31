@@ -2,6 +2,17 @@ import base64
 import requests
 import streamlit as st
 
+
+# Ocultar la barra superior, el menú de opciones y el pie de página
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 st.set_page_config(
     page_title="Inscripción y Gestión Escolar - Modelos ONU",
     page_icon="🏫",
