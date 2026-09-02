@@ -33,7 +33,6 @@ API_URL = st.secrets["API_URL"]
 
 
 def notificar_apps_script(action, data):
-    """Llama a Google Apps Script para enviar correos de notificación."""
     try:
         requests.post(API_URL, json={"action": action, "data": data}, timeout=5)
     except Exception:
@@ -54,15 +53,15 @@ if not st.session_state["docente_autenticado"]:
         ["🔑 Iniciar Sesión", "📝 Preinscripción de Nueva Escuela"]
     )
 
-    # LOGIN DE DELEGACIÓN EXISTENTE
+    # LOGIN CON EMAIL
     with subtab_login:
         st.markdown("### Ingrese con sus Credenciales Institucionales")
         with st.form("form_login_docente"):
             col_l1, col_l2 = st.columns(2)
             with col_l1:
-                id_del_input = st.text_input(
-                    "Código de Delegación (ej: DEL-001):"
-                ).strip()
+                email_input = st.text_input(
+                    "Correo Electrónico del Docente (Código de Delegación):"
+                ).strip().lower()
             with col_l2:
                 clave_input = st.text_input(
                     "Clave de Acceso (Secret Hash):", type="password"
@@ -71,21 +70,21 @@ if not st.session_state["docente_autenticado"]:
             btn_login = st.form_submit_button("Ingresar al Portal")
 
             if btn_login:
-                if not id_del_input or not clave_input:
+                if not email_input or not clave_input:
                     st.error("Complete ambos campos.")
                 else:
                     es_valido, res = validar_acceso_docente(
-                        id_del_input, clave_input
+                        email_input, clave_input
                     )
                     if es_valido:
                         st.session_state["docente_autenticado"] = True
-                        st.session_state["id_delegacion"] = id_del_input
+                        st.session_state["id_delegacion"] = email_input
                         st.success("¡Acceso correcto!")
                         st.rerun()
                     else:
                         st.error(res)
 
-    # FORMULARIO DE PREINSCRIPCIÓN
+    # REGISTRO
     with subtab_registro:
         st.markdown("### Formulario de Preinscripción Institucional")
         modelos_activos = obtener_modelos_activos()
@@ -110,7 +109,7 @@ if not st.session_state["docente_autenticado"]:
                 docente_nombre = st.text_input(
                     "Nombre y Apellido del Docente Responsable *:"
                 )
-                docente_email = st.text_input("Correo Electrónico (Email) *:")
+                docente_email = st.text_input("Correo Electrónico del Docente (Será su ID) *:").strip().lower()
                 docente_tel = st.text_input("Teléfono Celular de Contacto *:")
 
             btn_preinscribir = st.form_submit_button(
@@ -145,8 +144,7 @@ if not st.session_state["docente_autenticado"]:
                         )
                         st.balloons()
                         st.info(
-                            f"**Guarde sus credenciales de acceso:**\n\n- **Código"
-                            " de Delegación:**"
+                            f"**Guarde sus credenciales de acceso:**\n\n- **Código de Delegación (Email):**"
                             f" `{res_reg['id_delegacion']}`\n- **Clave de"
                             f" Acceso:** `{res_reg['secret_hash']}`"
                         )
@@ -172,7 +170,7 @@ id_modelo = escuela.get("id_modelo", "MONUCBA_2026")
 st.sidebar.markdown(
     f"### 🏛️ {escuela.get('nombre_colegio', 'Mi Institución')}"
 )
-st.sidebar.markdown(f"**Código:** `{id_del}`")
+st.sidebar.markdown(f"**Email / Código:** `{id_del}`")
 st.sidebar.markdown(
     f"**Estado Legajo:** `{escuela.get('estado', 'PREINSCRIPTO')}`"
 )
@@ -189,7 +187,7 @@ tab_nomina, tab_bancas, tab_pagos_doc = st.tabs([
 ])
 
 # ------------------------------------------
-# CARGA DE NÓMINA CON RENDERIZADO DINÁMICO
+# CARGA DE NÓMINA
 # ------------------------------------------
 with tab_nomina:
     st.subheader("👥 Nómina de Estudiantes y Docentes Acompañantes")
@@ -216,7 +214,6 @@ with tab_nomina:
             with col3:
                 alergias = st.text_area("Observaciones Médicas / Alergias:")
 
-            # Renderizado dinámico de campos configurados desde Secretaría
             respuestas_dinamicas = {}
             if esquema_campos:
                 st.markdown("---")
