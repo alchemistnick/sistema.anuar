@@ -8,21 +8,32 @@ from db_docentes import (
     obtener_datos_delegacion,
     obtener_esquema_formulario,
     obtener_integrantes,
+    obtener_modelos_activos,
+    preinscribir_escuela,
     registrar_pago_comprobante,
     validar_acceso_docente,
 )
 
 st.set_page_config(
-    page_title="Portal Docente - Inscription & Gestión",
+    page_title="Portal Docente - Preinscripción y Gestión",
     page_icon="🏫",
     layout="wide",
 )
+
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 API_URL = st.secrets["API_URL"]
 
 
 def notificar_apps_script(action, data):
-    """Dispara correos de notificación vía Apps Script."""
+    """Llama a Google Apps Script para enviar correos de notificación."""
     try:
         requests.post(API_URL, json={"action": action, "data": data}, timeout=5)
     except Exception:
@@ -31,47 +42,128 @@ def notificar_apps_script(action, data):
 
 st.title("🏫 Portal de Gestión Escolar — Modelos ONU")
 
-# ==========================================
-# LOGIN DE LA INSTITUCIÓN
-# ==========================================
 if "docente_autenticado" not in st.session_state:
     st.session_state["docente_autenticado"] = False
     st.session_state["id_delegacion"] = None
 
+# ==========================================
+# 1. PANTALLA PÚBLICA: REGISTRO Y LOGIN
+# ==========================================
 if not st.session_state["docente_autenticado"]:
-    st.markdown("### 🔑 Iniciar Sesión con Clave Institucional")
-    with st.form("form_login_docente"):
-        col_l1, col_l2 = st.columns(2)
-        with col_l1:
-            id_del_input = st.text_input(
-                "Código de Delegación / Escuela (ej: DEL-001):"
-            ).strip()
-        with col_l2:
-            clave_input = st.text_input(
-                "Clave de Acceso (Secret Hash):", type="password"
-            ).strip()
+    subtab_login, subtab_registro = st.tabs(
+        ["🔑 Iniciar Sesión", "📝 Preinscripción de Nueva Escuela"]
+    )
 
-        btn_login = st.form_submit_button("Ingresar al Portal")
+    # LOGIN DE DELEGACIÓN EXISTENTE
+    with subtab_login:
+        st.markdown("### Ingrese con sus Credenciales Institucionales")
+        with st.form("form_login_docente"):
+            col_l1, col_l2 = st.columns(2)
+            with col_l1:
+                id_del_input = st.text_input(
+                    "Código de Delegación (ej: DEL-001):"
+                ).strip()
+            with col_l2:
+                clave_input = st.text_input(
+                    "Clave de Acceso (Secret Hash):", type="password"
+                ).strip()
 
-        if btn_login:
-            if not id_del_input or not clave_input:
-                st.error("Por favor complete ambos campos.")
-            else:
-                es_valido, res = validar_acceso_docente(
-                    id_del_input, clave_input
-                )
-                if es_valido:
-                    st.session_state["docente_autenticado"] = True
-                    st.session_state["id_delegacion"] = id_del_input
-                    st.session_state["datos_escuela"] = res
-                    st.success("¡Acceso correcto!")
-                    st.rerun()
+            btn_login = st.form_submit_button("Ingresar al Portal")
+
+            if btn_login:
+                if not id_del_input or not clave_input:
+                    st.error("Complete ambos campos.")
                 else:
-                    st.error(res)
+                    es_valido, res = validar_acceso_docente(
+                        id_del_input, clave_input
+                    )
+                    if es_valido:
+                        st.session_state["docente_autenticado"] = True
+                        st.session_state["id_delegacion"] = id_del_input
+                        st.success("¡Acceso correcto!")
+                        st.rerun()
+                    else:
+                        st.error(res)
+
+    # FORMULARIO DE PREINSCRIPCIÓN
+    with subtab_registro:
+        st.markdown("### Formulario de Preinscripción Institucional")
+        modelos_activos = obtener_modelos_activos()
+        dict_mod = {m["nombre_visible"]: m["id_modelo"] for m in modelos_activos}
+
+        with st.form("form_preinscripcion"):
+            mod_sel = st.selectbox(
+                "Seleccione el Modelo al que desea inscribirse:",
+                list(dict_mod.keys()),
+            )
+            col_r1, col_r2 = st.columns(2)
+            with col_r1:
+                nombre_escuela = st.text_input("Nombre de la Institución *:")
+                direccion_escuela = st.text_input("Dirección de la Escuela:")
+                cupos_solicitados = st.number_input(
+                    "Cupos / Delegaciones estimadas:",
+                    min_value=1,
+                    max_value=50,
+                    value=10,
+                )
+            with col_r2:
+                docente_nombre = st.text_input(
+                    "Nombre y Apellido del Docente Responsable *:"
+                )
+                docente_email = st.text_input("Correo Electrónico (Email) *:")
+                docente_tel = st.text_input("Teléfono Celular de Contacto *:")
+
+            btn_preinscribir = st.form_submit_button(
+                "🚀 Confirmar Preinscripción"
+            )
+
+            if btn_preinscribir:
+                if (
+                    not nombre_escuela
+                    or not docente_nombre
+                    or not docente_email
+                    or not docente_tel
+                ):
+                    st.error(
+                        "Complete todos los campos obligatorios marcados con"
+                        " *."
+                    )
+                else:
+                    datos_nueva_escuela = {
+                        "id_modelo": dict_mod[mod_sel],
+                        "nombre_colegio": nombre_escuela,
+                        "direccion_escuela": direccion_escuela,
+                        "cupos_solicitados": cupos_solicitados,
+                        "docente_apellido_nombre": docente_nombre,
+                        "docente_email": docente_email,
+                        "docente_telefono": docente_tel,
+                    }
+                    ok, res_reg = preinscribir_escuela(datos_nueva_escuela)
+                    if ok:
+                        st.success(
+                            "🎉 ¡Preinscripción registrada exitosamente!"
+                        )
+                        st.balloons()
+                        st.info(
+                            f"**Guarde sus credenciales de acceso:**\n\n- **Código"
+                            " de Delegación:**"
+                            f" `{res_reg['id_delegacion']}`\n- **Clave de"
+                            f" Acceso:** `{res_reg['secret_hash']}`"
+                        )
+                        notificar_apps_script(
+                            "NUEVA_PREINSCRIPCION",
+                            {
+                                "id_delegacion": res_reg["id_delegacion"],
+                                "docente_email": docente_email,
+                            },
+                        )
+                    else:
+                        st.error(res_reg)
+
     st.stop()
 
 # ==========================================
-# PANEL PRINCIPAL DOCENTE
+# 2. PANEL PRIVADO DEL DOCENTE
 # ==========================================
 id_del = st.session_state["id_delegacion"]
 escuela = obtener_datos_delegacion(id_del)
@@ -82,7 +174,7 @@ st.sidebar.markdown(
 )
 st.sidebar.markdown(f"**Código:** `{id_del}`")
 st.sidebar.markdown(
-    f"**Estado del Legajo:** `{escuela.get('estado', 'REGISTRADO')}`"
+    f"**Estado Legajo:** `{escuela.get('estado', 'PREINSCRIPTO')}`"
 )
 
 if st.sidebar.button("Cerrar Sesión"):
@@ -97,11 +189,10 @@ tab_nomina, tab_bancas, tab_pagos_doc = st.tabs([
 ])
 
 # ------------------------------------------
-# 1. CARGA DE NÓMINA CON CAMPOS DINÁMICOS
+# CARGA DE NÓMINA CON RENDERIZADO DINÁMICO
 # ------------------------------------------
 with tab_nomina:
     st.subheader("👥 Nómina de Estudiantes y Docentes Acompañantes")
-
     integrantes_actuales = obtener_integrantes(id_del)
     esquema_campos = obtener_esquema_formulario(id_modelo)
 
@@ -125,7 +216,7 @@ with tab_nomina:
             with col3:
                 alergias = st.text_area("Observaciones Médicas / Alergias:")
 
-            # RENDERIZADO DINÁMICO DE CAMPOS ADICIONALES (CONFIGURADOS EN SECRETARÍA)
+            # Renderizado dinámico de campos configurados desde Secretaría
             respuestas_dinamicas = {}
             if esquema_campos:
                 st.markdown("---")
@@ -206,7 +297,7 @@ with tab_nomina:
         st.info("Aún no ha registrado participantes en la nómina.")
 
 # ------------------------------------------
-# 2. BANCAS ASIGNADAS
+# BANCAS Y PAGOS
 # ------------------------------------------
 with tab_bancas:
     st.subheader("📌 Bancas y Países Asignados")
@@ -218,13 +309,8 @@ with tab_bancas:
                 f" **{b.get('pais', '-')}**"
             )
     else:
-        st.info(
-            "Su institución aún no tiene bancas o países asignados post-sorteo."
-        )
+        st.info("Su institución aún no tiene bancas asignadas.")
 
-# ------------------------------------------
-# 3. INFORMACIÓN DE PAGOS
-# ------------------------------------------
 with tab_pagos_doc:
     st.subheader("💰 Informar Comprobante de Transferencia / Pago")
     with st.form("form_pago"):
