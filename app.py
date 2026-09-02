@@ -19,7 +19,6 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# Inicialización Singleton de Firebase
 if not firebase_admin._apps:
     cred = credentials.Certificate(dict(st.secrets["firebase"]))
     firebase_admin.initialize_app(cred)
@@ -27,7 +26,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 API_URL = st.secrets["API_URL"]
 
-# IDs de carpetas fijas en Drive
+# IDs fijas de carpetas en Google Drive
 FOLDER_COMPROBANTES = "1-QVd95Y2butIg9DNp3cPuIQI6sII50Rk"
 FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
 
@@ -47,11 +46,22 @@ def subir_archivo_a_drive_via_script(
             "mimeType": mime_type,
             "folderId": folder_id,
         }
-        res = requests.post(API_URL, json=payload, timeout=30)
-        res_json = res.json()
-        if res_json.get("status") == "success":
-            return True, res_json.get("fileUrl")
-        return False, res_json.get("message", "Error al subir a Drive")
+        res = requests.post(
+            API_URL, json=payload, timeout=35, allow_redirects=True
+        )
+
+        try:
+            res_json = res.json()
+            if res_json.get("status") == "success":
+                return True, res_json.get("fileUrl")
+            return False, res_json.get("message", "Error al subir a Drive")
+        except Exception:
+            return (
+                False,
+                "Error en la respuesta del servidor Google Web App (Verifique"
+                " los permisos 'Cualquier persona' en el despliegue).",
+            )
+
     except Exception as e:
         return False, f"Error de comunicación con el servidor: {e}"
 
@@ -369,7 +379,7 @@ elif menu == "🔑 Ingreso a Mi Delegación":
             else:
                 st.error(escuela)
 
-# 3. SUBIR COMPROBANTE DE PAGO (SUBIDA A DRIVE VÍA JAVASCRIPT/APPS SCRIPT)
+# 3. SUBIR COMPROBANTE DE PAGO
 elif menu == "💳 Subir Comprobante de Pago":
     st.subheader("💳 Subir Comprobante de Pago")
     with st.form("form_pago"):
