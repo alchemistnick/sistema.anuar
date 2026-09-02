@@ -56,10 +56,11 @@ def subir_archivo_a_drive_via_script(
                 return True, res_json.get("fileUrl")
             return False, res_json.get("message", "Error al subir a Drive")
         except Exception:
+            # Captura el código HTTP y los primeros 300 caracteres recibidos
             return (
                 False,
-                "Error en la respuesta del servidor Google Web App (Verifique"
-                " los permisos 'Cualquier persona' en el despliegue).",
+                f"Status Code Google: {res.status_code} | Respuesta:"
+                f" {res.text[:300]}",
             )
 
     except Exception as e:
