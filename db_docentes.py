@@ -1,8 +1,9 @@
+import secrets
 import firebase_admin
 from firebase_admin import credentials, firestore
 import streamlit as st
 
-# Inicialización de Firebase (Singleton)
+# Inicialización Singleton de Firebase
 if not firebase_admin._apps:
     cred = credentials.Certificate(dict(st.secrets["firebase"]))
     firebase_admin.initialize_app(cred)
@@ -10,8 +11,60 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ==========================================
-# 1. AUTENTICACIÓN Y DATOS DE LA ESCUELA
+# 1. AUTENTICACIÓN Y REGISTRO DE ESCUELAS
 # ==========================================
+
+
+def obtener_modelos_activos():
+    """Recupera la lista de modelos activos desde Firestore."""
+    try:
+        docs = db.collection("modelos").stream()
+        modelos = []
+        for doc in docs:
+            m = doc.to_dict()
+            m["id_modelo"] = doc.id
+            modelos.append(m)
+
+        if not modelos:
+            return [
+                {
+                    "id_modelo": "MONUCBA_2026",
+                    "nombre_visible": "MONUCBA 2026",
+                },
+                {"id_modelo": "CATE_2026", "nombre_visible": "Modelo CATE 2026"},
+            ]
+        return modelos
+    except Exception as e:
+        st.error(f"Error al cargar modelos desde Firestore: {e}")
+        return [
+            {"id_modelo": "MONUCBA_2026", "nombre_visible": "MONUCBA 2026"}
+        ]
+
+
+def preinscribir_escuela(datos_escuela):
+    """Crea un documento de delegación con ID automático y genera un secret_hash de acceso."""
+    try:
+        secret_hash = secrets.token_hex(3).upper()
+
+        ref_del = db.collection("delegaciones").document()
+        id_delegacion = f"DEL-{ref_del.id[:5].upper()}"
+
+        payload = {
+            "id_delegacion": id_delegacion,
+            "secret_hash": secret_hash,
+            "estado": "PREINSCRIPTO",
+            "fecha_registro": firestore.SERVER_TIMESTAMP,
+            **datos_escuela,
+        }
+
+        db.collection("delegaciones").document(id_delegacion).set(payload)
+
+        return True, {
+            "id_delegacion": id_delegacion,
+            "secret_hash": secret_hash,
+        }
+    except Exception as e:
+        return False, f"Error al registrar la institución: {e}"
 
 
 def validar_acceso_docente(id_delegacion, clave_hash):
@@ -40,7 +93,7 @@ def obtener_datos_delegacion(id_delegacion):
 
 
 # ==========================================
-# 2. CAMPOS DINÁMICOS Y PARÁMETROS
+# 2. ESQUEMA DINÁMICO Y BANCAS
 # ==========================================
 
 
@@ -120,10 +173,8 @@ def eliminar_integrante(id_delegacion, dni):
 # ==========================================
 
 
-def registrar_pago_comprobante(
-    id_delegacion, id_modelo, monto, drive_url, id_pago_custom=None
-):
-    """Registra una transferencia/comprobante en la colección de pagos."""
+def registrar_pago_comprobante(id_delegacion, id_modelo, monto, drive_url):
+    """Registra una transferencia en la colección de pagos."""
     try:
         pago_ref = db.collection("pagos").document()
         payload = {
