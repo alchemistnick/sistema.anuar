@@ -1,9 +1,8 @@
-import secrets
 import firebase_admin
 from firebase_admin import credentials, firestore
+import secrets
 import streamlit as st
 
-# Inicialización Singleton de Firebase
 if not firebase_admin._apps:
     cred = credentials.Certificate(dict(st.secrets["firebase"]))
     firebase_admin.initialize_app(cred)
@@ -11,12 +10,11 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ==========================================
-# 1. AUTENTICACIÓN Y REGISTRO DE ESCUELAS
+# 1. AUTENTICACIÓN Y REGISTRO
 # ==========================================
 
 
 def obtener_modelos_activos():
-    """Recupera la lista de modelos activos desde Firestore."""
     try:
         docs = db.collection("modelos").stream()
         modelos = []
@@ -42,49 +40,60 @@ def obtener_modelos_activos():
 
 
 def preinscribir_escuela(datos_escuela):
-    """Crea un documento de delegación con ID automático y genera un secret_hash de acceso."""
+    """Crea una delegación usando el email del docente como ID único."""
     try:
+        # Normalizar email como ID primario de la delegación
+        docente_email = str(datos_escuela.get("docente_email", "")).strip().lower()
+
+        if not docente_email or "@" not in docente_email:
+            return False, "Debe ingresar un correo electrónico válido."
+
+        # Verificar si la escuela/docente ya está preinscripta
+        doc_ref = db.collection("delegaciones").document(docente_email)
+        if doc_ref.get().exists:
+            return False, f"Ya existe una delegación registrada con el correo '{docente_email}'."
+
+        # Generar clave de acceso de 6 caracteres
         secret_hash = secrets.token_hex(3).upper()
 
-        ref_del = db.collection("delegaciones").document()
-        id_delegacion = f"DEL-{ref_del.id[:5].upper()}"
-
         payload = {
-            "id_delegacion": id_delegacion,
+            "id_delegacion": docente_email,
             "secret_hash": secret_hash,
             "estado": "PREINSCRIPTO",
             "fecha_registro": firestore.SERVER_TIMESTAMP,
             **datos_escuela,
         }
 
-        db.collection("delegaciones").document(id_delegacion).set(payload)
+        doc_ref.set(payload)
 
         return True, {
-            "id_delegacion": id_delegacion,
+            "id_delegacion": docente_email,
             "secret_hash": secret_hash,
         }
     except Exception as e:
         return False, f"Error al registrar la institución: {e}"
 
 
-def validar_acceso_docente(id_delegacion, clave_hash):
-    """Verifica si el código de delegación y clave coinciden en Firestore."""
+def validar_acceso_docente(docente_email, clave_hash):
+    """Verifica el acceso con Email del Docente y Clave Hash."""
     try:
-        doc = db.collection("delegaciones").document(str(id_delegacion)).get()
+        email_clean = str(docente_email).strip().lower()
+        doc = db.collection("delegaciones").document(email_clean).get()
         if doc.exists:
             datos = doc.to_dict()
             if str(datos.get("secret_hash")).strip() == str(clave_hash).strip():
                 datos["id"] = doc.id
                 return True, datos
             return False, "La clave ingresada es incorrecta."
-        return False, "El código de delegación no existe."
+        return False, "El correo electrónico no se encuentra registrado."
     except Exception as e:
         return False, f"Error al verificar credenciales: {e}"
 
 
-def obtener_datos_delegacion(id_delegacion):
-    """Recupera la información completa de la escuela."""
-    doc = db.collection("delegaciones").document(str(id_delegacion)).get()
+def obtener_datos_delegacion(docente_email):
+    """Recupera la información completa de la delegación por correo."""
+    email_clean = str(docente_email).strip().lower()
+    doc = db.collection("delegaciones").document(email_clean).get()
     if doc.exists:
         d = doc.to_dict()
         d["id"] = doc.id
@@ -93,12 +102,11 @@ def obtener_datos_delegacion(id_delegacion):
 
 
 # ==========================================
-# 2. ESQUEMA DINÁMICO Y BANCAS
+# 2. ESQUEMAS Y BANCAS
 # ==========================================
 
 
 def obtener_esquema_formulario(id_modelo):
-    """Carga los campos personalizados creados desde la app de Secretaría."""
     try:
         doc = db.collection("configuracion").document(str(id_modelo)).get()
         if doc.exists:
@@ -108,12 +116,12 @@ def obtener_esquema_formulario(id_modelo):
         return []
 
 
-def obtener_bancas_asignadas(id_delegacion):
-    """Carga las bancas/países asignados a la delegación."""
+def obtener_bancas_asignadas(docente_email):
     try:
+        email_clean = str(docente_email).strip().lower()
         docs = (
             db.collection("delegaciones")
-            .document(str(id_delegacion))
+            .document(email_clean)
             .collection("asignaciones")
             .stream()
         )
@@ -123,15 +131,15 @@ def obtener_bancas_asignadas(id_delegacion):
 
 
 # ==========================================
-# 3. GESTIÓN DE NÓMINA (INTEGRANTES)
+# 3. GESTIÓN DE NÓMINA
 # ==========================================
 
 
-def obtener_integrantes(id_delegacion):
-    """Obtiene la lista de estudiantes y docentes cargados."""
+def obtener_integrantes(docente_email):
+    email_clean = str(docente_email).strip().lower()
     docs = (
         db.collection("delegaciones")
-        .document(str(id_delegacion))
+        .document(email_clean)
         .collection("integrantes")
         .stream()
     )
@@ -144,12 +152,12 @@ def obtener_integrantes(id_delegacion):
 
 
 def guardar_o_actualizar_integrante(
-    id_delegacion, dni, datos_integrante, campos_dinamicos_respuestas
+    docente_email, dni, datos_integrante, campos_dinamicos_respuestas
 ):
-    """Guarda o actualiza un participante en la subcolección de la delegación."""
     try:
+        email_clean = str(docente_email).strip().lower()
         payload = {**datos_integrante, **campos_dinamicos_respuestas}
-        db.collection("delegaciones").document(str(id_delegacion)).collection(
+        db.collection("delegaciones").document(email_clean).collection(
             "integrantes"
         ).document(str(dni)).set(payload, merge=True)
         return True, "Participante guardado correctamente."
@@ -157,10 +165,10 @@ def guardar_o_actualizar_integrante(
         return False, f"Error al guardar integrante: {e}"
 
 
-def eliminar_integrante(id_delegacion, dni):
-    """Elimina un integrante de la nómina."""
+def eliminar_integrante(docente_email, dni):
     try:
-        db.collection("delegaciones").document(str(id_delegacion)).collection(
+        email_clean = str(docente_email).strip().lower()
+        db.collection("delegaciones").document(email_clean).collection(
             "integrantes"
         ).document(str(dni)).delete()
         return True
@@ -169,16 +177,15 @@ def eliminar_integrante(id_delegacion, dni):
 
 
 # ==========================================
-# 4. CARGA DE COMPROBANTES DE PAGO
+# 4. COMPROBANTES DE PAGO
 # ==========================================
 
 
-def registrar_pago_comprobante(id_delegacion, id_modelo, monto, drive_url):
-    """Registra una transferencia en la colección de pagos."""
+def registrar_pago_comprobante(docente_email, id_modelo, monto, drive_url):
     try:
         pago_ref = db.collection("pagos").document()
         payload = {
-            "id_delegacion": str(id_delegacion),
+            "id_delegacion": str(docente_email).strip().lower(),
             "id_modelo": str(id_modelo),
             "monto": float(monto),
             "drive_file_url": drive_url,
