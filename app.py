@@ -5,6 +5,7 @@ from db_docentes import (
     eliminar_integrante,
     guardar_o_actualizar_integrante,
     obtener_bancas_asignadas,
+    obtener_configuracion_preinscripcion,
     obtener_datos_delegacion,
     obtener_esquema_formulario,
     obtener_integrantes,
@@ -33,6 +34,7 @@ API_URL = st.secrets["API_URL"]
 
 
 def notificar_apps_script(action, data):
+    """Envia avisos por correo a través de Google Apps Script."""
     try:
         requests.post(API_URL, json={"action": action, "data": data}, timeout=5)
     except Exception:
@@ -46,7 +48,7 @@ if "docente_autenticado" not in st.session_state:
     st.session_state["id_delegacion"] = None
 
 # ==========================================
-# 1. PANTALLA PÚBLICA: REGISTRO Y LOGIN
+# 1. VISTA PÚBLICA: INICIO DE SESIÓN Y REGISTRO
 # ==========================================
 if not st.session_state["docente_autenticado"]:
     subtab_login, subtab_registro = st.tabs(
@@ -84,17 +86,25 @@ if not st.session_state["docente_autenticado"]:
                     else:
                         st.error(res)
 
-    # REGISTRO
+    # PREINSCRIPCIÓN DINÁMICA
     with subtab_registro:
         st.markdown("### Formulario de Preinscripción Institucional")
+
         modelos_activos = obtener_modelos_activos()
         dict_mod = {m["nombre_visible"]: m["id_modelo"] for m in modelos_activos}
 
+        mod_sel = st.selectbox(
+            "Seleccione el Modelo al que desea inscribirse:",
+            list(dict_mod.keys()),
+        )
+        id_modelo_sel = dict_mod[mod_sel]
+
+        # Lectura en vivo de los campos y configuración definidos en Secretaría
+        config_modelo = obtener_configuracion_preinscripcion(id_modelo_sel)
+        campos_dinamicos_pre = config_modelo.get("campos_personalizados", [])
+
         with st.form("form_preinscripcion"):
-            mod_sel = st.selectbox(
-                "Seleccione el Modelo al que desea inscribirse:",
-                list(dict_mod.keys()),
-            )
+            st.markdown("#### 🏛️ Datos Base de la Institución")
             col_r1, col_r2 = st.columns(2)
             with col_r1:
                 nombre_escuela = st.text_input("Nombre de la Institución *:")
@@ -109,8 +119,46 @@ if not st.session_state["docente_autenticado"]:
                 docente_nombre = st.text_input(
                     "Nombre y Apellido del Docente Responsable *:"
                 )
-                docente_email = st.text_input("Correo Electrónico del Docente (Será su ID) *:").strip().lower()
+                docente_email = st.text_input(
+                    "Correo Electrónico del Docente (Será su ID de Acceso) *:"
+                ).strip().lower()
                 docente_tel = st.text_input("Teléfono Celular de Contacto *:")
+
+            # RENDERIZADO DE CAMPOS DINÁMICOS
+            respuestas_dinamicas_pre = {}
+            if campos_dinamicos_pre:
+                st.markdown("---")
+                st.markdown(
+                    "#### 📋 Información Adicional Requerida por Secretaría"
+                )
+                for campo in campos_dinamicos_pre:
+                    lbl = campo.get("nombre_campo")
+                    tipo = campo.get("tipo_dato")
+                    req = " *" if campo.get("es_requerido") else ""
+
+                    if tipo == "texto":
+                        respuestas_dinamicas_pre[lbl] = st.text_input(
+                            f"{lbl}{req}"
+                        )
+                    elif tipo == "numero":
+                        respuestas_dinamicas_pre[lbl] = st.number_input(
+                            f"{lbl}{req}", min_value=0
+                        )
+                    elif tipo == "booleano":
+                        respuestas_dinamicas_pre[lbl] = st.checkbox(
+                            f"{lbl}{req}"
+                        )
+                    elif tipo == "seleccion":
+                        opcs = [
+                            o.strip()
+                            for o in campo.get(
+                                "opciones_separadas_por_coma", ""
+                            ).split(",")
+                            if o.strip()
+                        ]
+                        respuestas_dinamicas_pre[lbl] = st.selectbox(
+                            f"{lbl}{req}", opcs if opcs else ["-"]
+                        )
 
             btn_preinscribir = st.form_submit_button(
                 "🚀 Confirmar Preinscripción"
@@ -129,13 +177,14 @@ if not st.session_state["docente_autenticado"]:
                     )
                 else:
                     datos_nueva_escuela = {
-                        "id_modelo": dict_mod[mod_sel],
+                        "id_modelo": id_modelo_sel,
                         "nombre_colegio": nombre_escuela,
                         "direccion_escuela": direccion_escuela,
                         "cupos_solicitados": cupos_solicitados,
                         "docente_apellido_nombre": docente_nombre,
                         "docente_email": docente_email,
                         "docente_telefono": docente_tel,
+                        "datos_adicionales_preinscripcion": respuestas_dinamicas_pre,
                     }
                     ok, res_reg = preinscribir_escuela(datos_nueva_escuela)
                     if ok:
@@ -144,7 +193,8 @@ if not st.session_state["docente_autenticado"]:
                         )
                         st.balloons()
                         st.info(
-                            f"**Guarde sus credenciales de acceso:**\n\n- **Código de Delegación (Email):**"
+                            f"**Guarde sus credenciales de acceso:**\n\n- **Código"
+                            " de Delegación (Email):**"
                             f" `{res_reg['id_delegacion']}`\n- **Clave de"
                             f" Acceso:** `{res_reg['secret_hash']}`"
                         )
@@ -187,7 +237,7 @@ tab_nomina, tab_bancas, tab_pagos_doc = st.tabs([
 ])
 
 # ------------------------------------------
-# CARGA DE NÓMINA
+# CARGA DE NÓMINA DE PARTICIPANTES
 # ------------------------------------------
 with tab_nomina:
     st.subheader("👥 Nómina de Estudiantes y Docentes Acompañantes")
