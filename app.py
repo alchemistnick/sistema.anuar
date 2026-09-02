@@ -1,3 +1,4 @@
+import base64
 import firebase_admin
 from firebase_admin import credentials, firestore
 import requests
@@ -26,10 +27,35 @@ if not firebase_admin._apps:
 db = firestore.client()
 API_URL = st.secrets["API_URL"]
 
+# IDs de carpetas fijas en Drive
+FOLDER_COMPROBANTES = "1-QVd95Y2butIg9DNp3cPuIQI6sII50Rk"
+FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
+
 
 # ==========================================
-# FUNCIONES DE BASE DE DATOS DOCENTE
+# FUNCIONES AUXILIARES Y BASE DE DATOS
 # ==========================================
+def subir_archivo_a_drive_via_script(
+    file_bytes, file_name, mime_type, folder_id
+):
+    try:
+        base64_data = base64.b64encode(file_bytes).decode("utf-8")
+        payload = {
+            "action": "UPLOAD_FILE",
+            "fileData": base64_data,
+            "fileName": file_name,
+            "mimeType": mime_type,
+            "folderId": folder_id,
+        }
+        res = requests.post(API_URL, json=payload, timeout=30)
+        res_json = res.json()
+        if res_json.get("status") == "success":
+            return True, res_json.get("fileUrl")
+        return False, res_json.get("message", "Error al subir a Drive")
+    except Exception as e:
+        return False, f"Error de comunicación con el servidor: {e}"
+
+
 def obtener_modelos_activos():
     try:
         docs = db.collection("modelos").stream()
@@ -343,7 +369,7 @@ elif menu == "🔑 Ingreso a Mi Delegación":
             else:
                 st.error(escuela)
 
-# 3. SUBIR COMPROBANTE DE PAGO
+# 3. SUBIR COMPROBANTE DE PAGO (SUBIDA A DRIVE VÍA JAVASCRIPT/APPS SCRIPT)
 elif menu == "💳 Subir Comprobante de Pago":
     st.subheader("💳 Subir Comprobante de Pago")
     with st.form("form_pago"):
@@ -352,33 +378,56 @@ elif menu == "💳 Subir Comprobante de Pago":
         monto_pago = st.number_input(
             "Monto Abonado ($):", min_value=0.0, format="%.2f"
         )
-        url_drive_comprobante = st.text_input(
-            "Enlace al Comprobante en Drive / Dropbox / Cloud:"
-        ).strip()
+        archivo_comprobante = st.file_uploader(
+            "Seleccionar Comprobante de Pago (PDF o Imagen):",
+            type=["pdf", "png", "jpg", "jpeg"],
+        )
 
         if st.form_submit_button("Enviar Comprobante"):
-            if not email_doc or not hash_pago or not url_drive_comprobante:
-                st.error("Completa todos los campos obligatorios.")
+            if not email_doc or not hash_pago or not archivo_comprobante:
+                st.error("Completa todos los campos y adjunta el comprobante.")
             else:
                 ok_val, escuela = validar_acceso_docente(email_doc, hash_pago)
                 if not ok_val:
                     st.error("Email o clave de acceso incorrecta.")
                 else:
-                    id_modelo = escuela.get("id_modelo", "")
-                    ok_pago, idPago = registrar_pago_comprobante(
-                        email_doc, id_modelo, monto_pago, url_drive_comprobante
-                    )
-                    if ok_pago:
-                        st.success(
-                            "¡Comprobante subido con éxito! ID de Seguimiento:"
-                            f" `{idPago}`"
+                    with st.spinner("Subiendo archivo a Google Drive..."):
+                        file_bytes = archivo_comprobante.read()
+                        file_name = f"Pago_{email_doc}_{archivo_comprobante.name}"
+                        mime_type = archivo_comprobante.type
+
+                        ok_up, res_url = subir_archivo_a_drive_via_script(
+                            file_bytes,
+                            file_name,
+                            mime_type,
+                            FOLDER_COMPROBANTES,
                         )
-                        notificar_apps_script(
-                            "NUEVO_PAGO_REGISTRADO",
-                            {"id_delegacion": email_doc, "monto": monto_pago},
-                        )
-                    else:
-                        st.error("Error al registrar el comprobante.")
+
+                        if ok_up:
+                            id_modelo = escuela.get("id_modelo", "")
+                            ok_pago, idPago = registrar_pago_comprobante(
+                                email_doc, id_modelo, monto_pago, res_url
+                            )
+                            if ok_pago:
+                                st.success(
+                                    "¡Comprobante subido correctamente a Drive"
+                                    f" y registrado! ID: `{idPago}`"
+                                )
+                                notificar_apps_script(
+                                    "NUEVO_PAGO_REGISTRADO",
+                                    {
+                                        "id_delegacion": email_doc,
+                                        "monto": monto_pago,
+                                        "drive_url": res_url,
+                                    },
+                                )
+                            else:
+                                st.error(
+                                    "Error al registrar el pago en la base de"
+                                    " datos."
+                                )
+                        else:
+                            st.error(f"Error al subir archivo: {res_url}")
 
 # 4. CARGA DE NÓMINA Y DOCUMENTACIÓN
 elif menu == "📋 Carga de Nómina y Documentación":
@@ -462,11 +511,13 @@ elif menu == "📋 Carga de Nómina y Documentación":
                         alergias = st.text_input(
                             "Alergias / Condición Médica:", value="Ninguna"
                         )
-                        ficha_med_url = st.text_input(
-                            "Enlace a Ficha Médica (Drive/Dropbox):"
+                        file_ficha = st.file_uploader(
+                            "Ficha Médica (PDF/Imagen):",
+                            type=["pdf", "png", "jpg", "jpeg"],
                         )
-                        aut_firmada_url = st.text_input(
-                            "Enlace a Autorización Firmada (Drive/Dropbox):"
+                        file_aut = st.file_uploader(
+                            "Autorización Firmada (PDF/Imagen):",
+                            type=["pdf", "png", "jpg", "jpeg"],
                         )
 
                     comentarios_participante = st.text_area(
@@ -486,13 +537,38 @@ elif menu == "📋 Carga de Nómina y Documentación":
                                 "Por favor completa Nombre, Apellido y DNI."
                             )
                         else:
+                            ficha_url = ""
+                            aut_url = ""
+
+                            with st.spinner(
+                                "Subiendo archivos a Google Drive..."
+                            ):
+                                if file_ficha:
+                                    ok_f, ficha_url = (
+                                        subir_archivo_a_drive_via_script(
+                                            file_ficha.read(),
+                                            f"Ficha_{dni}_{file_ficha.name}",
+                                            file_ficha.type,
+                                            FOLDER_FICHAS,
+                                        )
+                                    )
+                                if file_aut:
+                                    ok_a, aut_url = (
+                                        subir_archivo_a_drive_via_script(
+                                            file_aut.read(),
+                                            f"Aut_{dni}_{file_aut.name}",
+                                            file_aut.type,
+                                            FOLDER_FICHAS,
+                                        )
+                                    )
+
                             datos_estudiante = {
                                 "nombre": nombre,
                                 "apellido": apellido,
                                 "dni": dni,
                                 "alergias_medicas": alergias,
-                                "ficha_medica_id": ficha_med_url,
-                                "autorizacion_id": aut_firmada_url,
+                                "ficha_medica_id": ficha_url,
+                                "autorizacion_id": aut_url,
                                 "comentarios": comentarios_participante,
                                 "rol_mnu": "Delegado/a",
                                 "id_asignacion": banca_objeto.get(
