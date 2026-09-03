@@ -26,7 +26,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 API_URL = st.secrets["API_URL"]
 
-# IDs fijas de carpetas en Google Drive
+# IDs de carpetas actualizados desde tus enlaces de Google Drive
 FOLDER_COMPROBANTES = "1-QVd95Y2butIg9DNp3cPuIQI6sII50Rk"
 FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
 
@@ -56,11 +56,10 @@ def subir_archivo_a_drive_via_script(
                 return True, res_json.get("fileUrl")
             return False, res_json.get("message", "Error al subir a Drive")
         except Exception:
-            # Captura el código HTTP y los primeros 300 caracteres recibidos
             return (
                 False,
-                f"Status Code Google: {res.status_code} | Respuesta:"
-                f" {res.text[:300]}",
+                "Error en la respuesta del servidor Google Web App (Verifique"
+                " los permisos 'Cualquier persona' en el despliegue).",
             )
 
     except Exception as e:
