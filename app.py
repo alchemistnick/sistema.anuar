@@ -403,7 +403,7 @@ elif menu == "💳 Subir Comprobante de Pago":
                             mime_type = archivo_comprobante.type
 
                             # Llamada estricta
-                            ok_subida, res_url = subir_archivo_a_drive_via_script(
+                           ok_subida, res_url = subir_archivo_a_drive_via_script(
                                 file_bytes,
                                 file_name,
                                 mime_type,
@@ -411,29 +411,26 @@ elif menu == "💳 Subir Comprobante de Pago":
                             )
 
                             if not ok_subida:
-                                st.error(f"Error al subir el archivo: {res_url}")
+                                st.error(f"No se pudo completar la subida del archivo: {res_url}")
                             else:
                                 id_modelo = escuela.get("id_modelo", "modelo_general")
                                 ok_pago, idPago = registrar_pago_comprobante(
-                                    email_doc, id_modelo, monto_pago, res_url
+                                    email_doc, id_modelo, float(monto_pago), res_url
                                 )
                                 
                                 if ok_pago:
-                                    st.success(f"¡Comprobante subido y registrado correctamente! ID: `{idPago}`")
+                                    st.success(f"¡Comprobante subido y registrado con éxito! ID: `{idPago}`")
                                     notificar_apps_script(
                                         "NUEVO_PAGO_REGISTRADO",
                                         {
                                             "id_delegacion": email_doc,
-                                            "monto": monto_pago,
+                                            "monto": float(monto_pago),
                                             "drive_url": res_url,
                                         },
                                     )
                                     st.balloons()
                                 else:
-                                    st.error(f"El archivo se subió a Drive pero falló el registro en base de datos: {idPago}")
-                    except Exception as ex:
-                        st.error(f"Error crítico: {ex}")
-
+                                    st.error(f"Error al registrar en Firestore: {idPago}")
 # 4. CARGA DE NÓMINA Y DOCUMENTACIÓN
 elif menu == "📋 Carga de Nómina y Documentación":
     st.subheader("📋 Registro de Participantes y Documentación")
