@@ -47,22 +47,36 @@ def subir_archivo_a_drive_via_script(
             "folderId": folder_id,
         }
         res = requests.post(
-            API_URL, json=payload, timeout=35, allow_redirects=True
+            API_URL, json=payload, timeout=45, allow_redirects=True
         )
+
+        # Imprimimos en consola o validamos el texto crudo si es necesario
+        if res.status_code != 200:
+            return (
+                False,
+                f"Error HTTP {res.status_code} del servidor de Google.",
+            )
 
         try:
             res_json = res.json()
-            if res_json.get("status") == "success":
-                return True, res_json.get("fileUrl")
-            return False, res_json.get("message", "Error al subir a Drive")
         except Exception:
             return (
                 False,
-                f"Error en la respuesta del servidor Google Web App. Status: {res.status_code} | Text: {res.text[:200]}",
+                f"El servidor respondió texto no JSON: {res.text[:150]}",
             )
 
+        # Verificamos si el estado es exitoso o si devolvió directamente el fileUrl
+        estado = str(res_json.get("status", "")).lower()
+        file_url = res_json.get("fileUrl") or res_json.get("url")
+
+        if estado == "success" or file_url:
+            return True, file_url
+
+        mensaje_error = res_json.get("message", "Error desconocido en Apps Script")
+        return False, mensaje_error
+
     except Exception as e:
-        return False, f"Error de comunicación con el servidor: {e}"
+        return False, f"Excepción de red con el servidor: {e}"
 
 
 def obtener_modelos_activos():
