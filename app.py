@@ -375,7 +375,7 @@ elif menu == "🔑 Ingreso a Mi Delegación":
             else:
                 st.error(escuela)
 
-# 3. SUBIR COMPROBANTE DE PAGO
+# 3. SUBIR COMPROBANTE DE PAGO (Bloque afinado)
 elif menu == "💳 Subir Comprobante de Pago":
     st.subheader("💳 Subir Comprobante de Pago")
     with st.form("form_pago"):
@@ -398,41 +398,42 @@ elif menu == "💳 Subir Comprobante de Pago":
                     st.error(f"Error de acceso: {escuela}")
                 else:
                     try:
-                        with st.spinner("Procesando y registrando comprobante..."):
+                        with st.spinner("Subiendo comprobante a Google Drive..."):
                             file_bytes = archivo_comprobante.read()
                             file_name = f"Pago_{email_doc}_{archivo_comprobante.name}"
                             mime_type = archivo_comprobante.type
 
-                            res_url = subir_archivo_a_drive_via_script(
+                            # Llamada estricta
+                            ok_subida, res_url = subir_archivo_a_drive_via_script(
                                 file_bytes,
                                 file_name,
                                 mime_type,
                                 FOLDER_COMPROBANTES,
                             )
 
-                            id_modelo = escuela.get("id_modelo", "modelo_general")
-                            ok_pago, idPago = registrar_pago_comprobante(
-                                email_doc, id_modelo, monto_pago, res_url
-                            )
-                            
-                            if ok_pago:
-                                st.success(
-                                    "¡Comprobante procesado y registrado correctamente en el sistema! ID de pago: "
-                                    f"`{idPago}`"
-                                )
-                                notificar_apps_script(
-                                    "NUEVO_PAGO_REGISTRADO",
-                                    {
-                                        "id_delegacion": email_doc,
-                                        "monto": monto_pago,
-                                        "drive_url": res_url,
-                                    },
-                                )
-                                st.balloons()
+                            if not ok_subida:
+                                st.error(f"Error al subir el archivo: {res_url}")
                             else:
-                                st.error(f"Error al registrar en la base de datos: {idPago}")
+                                id_modelo = escuela.get("id_modelo", "modelo_general")
+                                ok_pago, idPago = registrar_pago_comprobante(
+                                    email_doc, id_modelo, monto_pago, res_url
+                                )
+                                
+                                if ok_pago:
+                                    st.success(f"¡Comprobante subido y registrado correctamente! ID: `{idPago}`")
+                                    notificar_apps_script(
+                                        "NUEVO_PAGO_REGISTRADO",
+                                        {
+                                            "id_delegacion": email_doc,
+                                            "monto": monto_pago,
+                                            "drive_url": res_url,
+                                        },
+                                    )
+                                    st.balloons()
+                                else:
+                                    st.error(f"El archivo se subió a Drive pero falló el registro en base de datos: {idPago}")
                     except Exception as ex:
-                        st.error(f"Error crítico en el proceso: {ex}")
+                        st.error(f"Error crítico: {ex}")
 
 # 4. CARGA DE NÓMINA Y DOCUMENTACIÓN
 elif menu == "📋 Carga de Nómina y Documentación":
