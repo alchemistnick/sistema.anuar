@@ -49,24 +49,16 @@ def subir_archivo_a_drive_via_script(
         res = requests.post(
             API_URL, json=payload, timeout=50, allow_redirects=True
         )
+        res_json = res.json()
         
-        # Intentamos extraer el enlace directo del JSON devuelto
-        try:
-            res_json = res.json()
-            file_url = res_json.get("fileUrl") or res_json.get("url")
-            if file_url:
-                return True, file_url
-        except Exception:
-            pass
+        # Buscamos el link individual del archivo
+        file_url = res_json.get("fileUrl") or res_json.get("url")
+        if file_url and "folders/" not in file_url:
+            return True, file_url
             
-        # Si el servidor procesó la petición con éxito HTTP 200 pero el JSON falló en leerse, 
-        # asignamos el enlace a la carpeta destino para que no frene al usuario
-        if res.status_code == 200:
-            return True, f"https://drive.google.com/drive/folders/{folder_id}"
-            
-        return False, f"Error HTTP {res.status_code}"
+        return False, "Google Apps Script no devolvió un enlace de archivo válido."
     except Exception as e:
-        return False, f"Excepción de conexión: {e}"
+        return False, f"Excepción al conectar con la API: {e}"
 
 
 def obtener_modelos_activos():
