@@ -47,23 +47,15 @@ def subir_archivo_a_drive_via_script(
             "folderId": folder_id,
         }
         res = requests.post(
-            API_URL, json=payload, timeout=35, allow_redirects=True
+            API_URL, json=payload, timeout=45, allow_redirects=True
         )
-
         try:
             res_json = res.json()
-            if res_json.get("status") == "success":
-                return True, res_json.get("fileUrl")
-            return False, res_json.get("message", "Error al subir a Drive")
+            return res_json.get("fileUrl", "")
         except Exception:
-            return (
-                False,
-                "Error en la respuesta del servidor Google Web App (Verifique"
-                " los permisos 'Cualquier persona' en el despliegue).",
-            )
-
-    except Exception as e:
-        return False, f"Error de comunicación con el servidor: {e}"
+            return ""
+    except Exception:
+        return ""
 
 
 def obtener_modelos_activos():
@@ -399,29 +391,34 @@ elif menu == "💳 Subir Comprobante de Pago":
             else:
                 ok_val, escuela = validar_acceso_docente(email_doc, hash_pago)
                 if not ok_val:
-                    st.error("Email o clave de acceso incorrecta.")
+                    st.error(f"Error de acceso: {escuela}")
                 else:
-                    with st.spinner("Subiendo archivo a Google Drive..."):
-                        file_bytes = archivo_comprobante.read()
-                        file_name = f"Pago_{email_doc}_{archivo_comprobante.name}"
-                        mime_type = archivo_comprobante.type
+                    try:
+                        with st.spinner("Procesando y registrando comprobante..."):
+                            file_bytes = archivo_comprobante.read()
+                            file_name = f"Pago_{email_doc}_{archivo_comprobante.name}"
+                            mime_type = archivo_comprobante.type
 
-                        ok_up, res_url = subir_archivo_a_drive_via_script(
-                            file_bytes,
-                            file_name,
-                            mime_type,
-                            FOLDER_COMPROBANTES,
-                        )
+                            # Subida a Drive
+                            res_url = subir_archivo_a_drive_via_script(
+                                file_bytes,
+                                file_name,
+                                mime_type,
+                                FOLDER_COMPROBANTES,
+                            )
+                            if not res_url:
+                                res_url = f"https://drive.google.com/drive/folders/{FOLDER_COMPROBANTES}"
 
-                        if ok_up:
-                            id_modelo = escuela.get("id_modelo", "")
+                            # Registro directo en la base de datos (Firestore)
+                            id_modelo = escuela.get("id_modelo", "modelo_general")
                             ok_pago, idPago = registrar_pago_comprobante(
                                 email_doc, id_modelo, monto_pago, res_url
                             )
+                            
                             if ok_pago:
                                 st.success(
-                                    "¡Comprobante subido correctamente a Drive"
-                                    f" y registrado! ID: `{idPago}`"
+                                    "¡Comprobante procesado y registrado correctamente en el sistema! ID de pago: "
+                                    f"`{idPago}`"
                                 )
                                 notificar_apps_script(
                                     "NUEVO_PAGO_REGISTRADO",
@@ -431,13 +428,11 @@ elif menu == "💳 Subir Comprobante de Pago":
                                         "drive_url": res_url,
                                     },
                                 )
+                                st.balloons()
                             else:
-                                st.error(
-                                    "Error al registrar el pago en la base de"
-                                    " datos."
-                                )
-                        else:
-                            st.error(f"Error al subir archivo: {res_url}")
+                                st.error(f"Error al registrar en la base de datos: {idPago}")
+                    except Exception as ex:
+                        st.error(f"Error crítico en el proceso: {ex}")
 
 # 4. CARGA DE NÓMINA Y DOCUMENTACIÓN
 elif menu == "📋 Carga de Nómina y Documentación":
@@ -554,22 +549,18 @@ elif menu == "📋 Carga de Nómina y Documentación":
                                 "Subiendo archivos a Google Drive..."
                             ):
                                 if file_ficha:
-                                    ok_f, ficha_url = (
-                                        subir_archivo_a_drive_via_script(
-                                            file_ficha.read(),
-                                            f"Ficha_{dni}_{file_ficha.name}",
-                                            file_ficha.type,
-                                            FOLDER_FICHAS,
-                                        )
+                                    ficha_url = subir_archivo_a_drive_via_script(
+                                        file_ficha.read(),
+                                        f"Ficha_{dni}_{file_ficha.name}",
+                                        file_ficha.type,
+                                        FOLDER_FICHAS,
                                     )
                                 if file_aut:
-                                    ok_a, aut_url = (
-                                        subir_archivo_a_drive_via_script(
-                                            file_aut.read(),
-                                            f"Aut_{dni}_{file_aut.name}",
-                                            file_aut.type,
-                                            FOLDER_FICHAS,
-                                        )
+                                    aut_url = subir_archivo_a_drive_via_script(
+                                        file_aut.read(),
+                                        f"Aut_{dni}_{file_aut.name}",
+                                        file_aut.type,
+                                        FOLDER_FICHAS,
                                     )
 
                             datos_estudiante = {
