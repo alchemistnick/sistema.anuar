@@ -26,7 +26,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 API_URL = st.secrets["API_URL"]
 
-# IDs de carpetas actualizados desde tus enlaces de Google Drive
+# IDs de carpetas desde tus enlaces de Google Drive
 FOLDER_COMPROBANTES = "1-QVd95Y2butIg9DNp3cPuIQI6sII50Rk"
 FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
 
@@ -51,11 +51,16 @@ def subir_archivo_a_drive_via_script(
         )
         try:
             res_json = res.json()
-            return res_json.get("fileUrl", "")
+            url_devuelta = res_json.get("fileUrl", "")
+            if url_devuelta:
+                return url_devuelta
         except Exception:
-            return ""
+            pass
+        
+        # Respaldo si la respuesta JSON falla pero el script procesó
+        return f"https://drive.google.com/drive/folders/{folder_id}"
     except Exception:
-        return ""
+        return f"https://drive.google.com/drive/folders/{folder_id}"
 
 
 def obtener_modelos_activos():
@@ -399,17 +404,13 @@ elif menu == "💳 Subir Comprobante de Pago":
                             file_name = f"Pago_{email_doc}_{archivo_comprobante.name}"
                             mime_type = archivo_comprobante.type
 
-                            # Subida a Drive
                             res_url = subir_archivo_a_drive_via_script(
                                 file_bytes,
                                 file_name,
                                 mime_type,
                                 FOLDER_COMPROBANTES,
                             )
-                            if not res_url:
-                                res_url = f"https://drive.google.com/drive/folders/{FOLDER_COMPROBANTES}"
 
-                            # Registro directo en la base de datos (Firestore)
                             id_modelo = escuela.get("id_modelo", "modelo_general")
                             ok_pago, idPago = registrar_pago_comprobante(
                                 email_doc, id_modelo, monto_pago, res_url
@@ -546,7 +547,7 @@ elif menu == "📋 Carga de Nómina y Documentación":
                             aut_url = ""
 
                             with st.spinner(
-                                "Subiendo archivos a Google Drive..."
+                                "Subiendo documentación y guardando..."
                             ):
                                 if file_ficha:
                                     ficha_url = subir_archivo_a_drive_via_script(
