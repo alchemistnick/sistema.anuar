@@ -392,7 +392,7 @@ elif menu == "🔑 Ingreso a Mi Delegación":
             else:
                 st.error(escuela)
 
-# 3. SUBIR COMPROBANTE DE PAGO
+# 3. SUBIR COMPROBANTE DE PAGO# 3. SUBIR COMPROBANTE DE PAGO
 elif menu == "💳 Subir Comprobante de Pago":
     st.subheader("💳 Subir Comprobante de Pago")
     with st.form("form_pago"):
@@ -415,33 +415,34 @@ elif menu == "💳 Subir Comprobante de Pago":
                     st.error(f"Error de acceso: {escuela}")
                 else:
                     try:
-                        with st.spinner("Subiendo archivo y registrando pago..."):
+                        with st.spinner("Subiendo archivo a Drive y registrando..."):
                             file_bytes = archivo_comprobante.read()
                             file_name = f"Pago_{email_doc}_{archivo_comprobante.name}"
                             mime_type = archivo_comprobante.type
 
-                            # 1. Subida a Drive vía Apps Script
-                            ok_up, res_url = subir_archivo_a_drive_via_script(
-                                file_bytes,
-                                file_name,
-                                mime_type,
-                                FOLDER_COMPROBANTES,
-                            )
+                            # Petición limpia a Apps Script
+                            base64_data = base64.b64encode(file_bytes).decode("utf-8")
+                            payload = {
+                                "action": "UPLOAD_FILE",
+                                "fileData": base64_data,
+                                "fileName": file_name,
+                                "mimeType": mime_type,
+                                "folderId": FOLDER_COMPROBANTES,
+                            }
+                            
+                            res = requests.post(API_URL, json=payload, timeout=45)
+                            res_json = res.json()
 
-                            if not ok_up:
-                                st.error(f"Fallo en Apps Script (Drive): {res_url}")
-                            else:
-                                # 2. Registro en Firestore
+                            if res_json.get("status") == "success":
+                                res_url = res_json.get("fileUrl")
                                 id_modelo = escuela.get("id_modelo", "modelo_general")
+                                
                                 ok_pago, idPago = registrar_pago_comprobante(
                                     email_doc, id_modelo, monto_pago, res_url
                                 )
                                 
                                 if ok_pago:
-                                    st.success(
-                                        "¡Comprobante subido y registrado con éxito! ID de pago: "
-                                        f"`{idPago}`"
-                                    )
+                                    st.success(f"¡Comprobante subido y registrado con éxito! ID: `{idPago}`")
                                     notificar_apps_script(
                                         "NUEVO_PAGO_REGISTRADO",
                                         {
@@ -452,9 +453,12 @@ elif menu == "💳 Subir Comprobante de Pago":
                                     )
                                     st.balloons()
                                 else:
-                                    st.error(f"El archivo se subió a Drive, pero falló Firestore: {idPago}")
+                                    st.error(f"El archivo se subió a Drive pero falló Firestore: {idPago}")
+                            else:
+                                st.error(f"Error desde Google Apps Script: {res_json.get('message', 'Desconocido')}")
+                                
                     except Exception as ex:
-                        st.error(f"Excepción crítica atrapada en el front: {ex}")
+                        st.error(f"Error crítico en la ejecución: {ex}")
 
 # 4. CARGA DE NÓMINA Y DOCUMENTACIÓN
 elif menu == "📋 Carga de Nómina y Documentación":
