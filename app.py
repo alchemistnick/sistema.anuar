@@ -49,18 +49,17 @@ def subir_archivo_a_drive_via_script(
         res = requests.post(
             API_URL, json=payload, timeout=45, allow_redirects=True
         )
-        try:
-            res_json = res.json()
-            url_devuelta = res_json.get("fileUrl", "")
-            if url_devuelta:
-                return url_devuelta
-        except Exception:
-            pass
+        res_json = res.json()
         
-        # Respaldo si la respuesta JSON falla pero el script procesó
-        return f"https://drive.google.com/drive/folders/{folder_id}"
-    except Exception:
-        return f"https://drive.google.com/drive/folders/{folder_id}"
+        # Exigimos que el script retorne el enlace directo del archivo individual
+        if res_json.get("status") == "success":
+            file_url = res_json.get("fileUrl")
+            if file_url and "drive.google.com" in file_url:
+                return True, file_url
+                
+        return False, res_json.get("message", "No se pudo obtener el enlace directo de Google Drive.")
+    except Exception as e:
+        return False, f"Excepción de red al subir: {e}"
 
 
 def obtener_modelos_activos():
