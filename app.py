@@ -374,7 +374,7 @@ elif menu == "🔑 Ingreso a Mi Delegación":
             else:
                 st.error(escuela)
 
-# 3. SUBIR COMPROBANTE DE PAGO (Bloque afinado)
+# 3. SUBIR COMPROBANTE DE PAGO
 elif menu == "💳 Subir Comprobante de Pago":
     st.subheader("💳 Subir Comprobante de Pago")
     with st.form("form_pago"):
@@ -402,8 +402,7 @@ elif menu == "💳 Subir Comprobante de Pago":
                             file_name = f"Pago_{email_doc}_{archivo_comprobante.name}"
                             mime_type = archivo_comprobante.type
 
-                            # Llamada estricta
-                           ok_subida, res_url = subir_archivo_a_drive_via_script(
+                            ok_subida, res_url = subir_archivo_a_drive_via_script(
                                 file_bytes,
                                 file_name,
                                 mime_type,
@@ -431,6 +430,9 @@ elif menu == "💳 Subir Comprobante de Pago":
                                     st.balloons()
                                 else:
                                     st.error(f"Error al registrar en Firestore: {idPago}")
+                    except Exception as ex:
+                        st.error(f"Error crítico: {ex}")
+
 # 4. CARGA DE NÓMINA Y DOCUMENTACIÓN
 elif menu == "📋 Carga de Nómina y Documentación":
     st.subheader("📋 Registro de Participantes y Documentación")
@@ -546,14 +548,14 @@ elif menu == "📋 Carga de Nómina y Documentación":
                                 "Subiendo documentación y guardando..."
                             ):
                                 if file_ficha:
-                                    ficha_url = subir_archivo_a_drive_via_script(
+                                    ok_f, ficha_url = subir_archivo_a_drive_via_script(
                                         file_ficha.read(),
                                         f"Ficha_{dni}_{file_ficha.name}",
                                         file_ficha.type,
                                         FOLDER_FICHAS,
                                     )
                                 if file_aut:
-                                    aut_url = subir_archivo_a_drive_via_script(
+                                    ok_a, aut_url = subir_archivo_a_drive_via_script(
                                         file_aut.read(),
                                         f"Aut_{dni}_{file_aut.name}",
                                         file_aut.type,
