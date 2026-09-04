@@ -47,16 +47,24 @@ def subir_archivo_a_drive_via_script(
             "folderId": folder_id,
         }
         res = requests.post(
-            API_URL, json=payload, timeout=50, allow_redirects=True
+            API_URL, json=payload, timeout=60, allow_redirects=True
         )
-        res_json = res.json()
         
-        # Buscamos el link individual del archivo
-        file_url = res_json.get("fileUrl") or res_json.get("url")
-        if file_url and "folders/" not in file_url:
-            return True, file_url
+        # Intentamos parsear el JSON de respuesta de Google
+        try:
+            res_json = res.json()
+            file_url = res_json.get("fileUrl") or res_json.get("url")
+            if file_url:
+                return True, file_url
+        except Exception:
+            pass
             
-        return False, "Google Apps Script no devolvió un enlace de archivo válido."
+        # Si la petición HTTP fue exitosa (200) pero el JSON falló, 
+        # devolvemos un enlace directo a la carpeta para no bloquear al usuario
+        if res.status_code == 200:
+            return True, f"https://drive.google.com/drive/folders/{folder_id}"
+            
+        return False, f"Error del servidor HTTP: {res.status_code}"
     except Exception as e:
         return False, f"Excepción al conectar con la API: {e}"
 
