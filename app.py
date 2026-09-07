@@ -148,9 +148,6 @@ def obtener_bancas_asignadas(email_doc):
 def guardar_participante_nomina(email_doc, dni, datos_participante):
     try:
         email_clean = str(email_doc).strip().lower()
-        
-        # CORRECCIÓN: Creamos un ID de documento único combinando el DNI y la asignación 
-        # para permitir múltiples integrantes en una misma banca (ej. comités dobles).
         id_asig_raw = str(datos_participante.get("id_asignacion", "general"))
         id_asig_limpio = id_asig_raw.replace(" ", "_").replace("/", "_").lower()
         id_documento_integrante = f"{dni}_{id_asig_limpio}"
@@ -420,55 +417,83 @@ elif menu == "📋 Carga de Nómina y Documentación":
                 regla_comite = mapa_reglas.get(organo_banca, {})
                 integrantes_permitidos = int(regla_comite.get("integrantes_por_banca", 2))
 
-                st.info(f"📌 El órgano **{organo_banca}** permite hasta **{integrantes_permitidos} estudiante(s)**.")
+                st.info(f"📌 El órgano **{organo_banca}** requiere/permite hasta **{integrantes_permitidos} estudiante(s)**. Complete los campos correspondientes a continuación:")
 
-                with st.form("form_estudiante"):
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        nombre = st.text_input("Nombre del Estudiante:")
-                        apellido = st.text_input("Apellido:")
-                        dni = st.text_input("DNI:")
-                    with col_b:
-                        alergias = st.text_input("Alergias / Condición Médica:", value="Ninguna")
-                        file_ficha = st.file_uploader("Ficha Médica (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"])
-                        file_aut = st.file_uploader("Autorización Firmada (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"])
+                with st.form("form_estudiante_multiple"):
+                    estudiantes_datos = []
+                    
+                    for i in range(1, integrantes_permitidos + 1):
+                        st.markdown(f"#### 👤 Integrante N° {i}")
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            nombre = st.text_input(f"Nombre del Estudiante {i}:", key=f"nombre_{i}")
+                            apellido = st.text_input(f"Apellido {i}:", key=f"apellido_{i}")
+                            dni = st.text_input(f"DNI {i}:", key=f"dni_{i}")
+                        with col_b:
+                            alergias = st.text_input(f"Alergias / Condición Médica {i}:", value="Ninguna", key=f"alergias_{i}")
+                            file_ficha = st.file_uploader(f"Ficha Médica N° {i} (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"], key=f"ficha_{i}")
+                            file_aut = st.file_uploader(f"Autorización Firmada N° {i} (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"], key=f"aut_{i}")
 
-                    comentarios_participante = st.text_area("Comentarios / Observaciones sobre este participante (opcional):")
+                        comentarios_participante = st.text_area(f"Comentarios / Observaciones sobre el integrante {i} (opcional):", key=f"comentarios_{i}")
+                        st.markdown("---")
+                        
+                        estudiantes_datos.append({
+                            "nombre": nombre,
+                            "apellido": apellido,
+                            "dni": dni,
+                            "alergias_medicas": alergias,
+                            "file_ficha": file_ficha,
+                            "file_aut": file_aut,
+                            "comentarios": comentarios_participante
+                        })
 
-                    if st.form_submit_button("💾 Guardar Participante en Nómina"):
-                        if not nombre or not apellido or not dni:
-                            st.error("Por favor completa Nombre, Apellido y DNI.")
-                        else:
-                            ficha_url = ""
-                            aut_url = ""
+                    if st.form_submit_button("💾 Guardar Todos los Integrantes de esta Banca"):
+                        hubo_error = False
+                        
+                        for idx, est in enumerate(estudiantes_datos, start=1):
+                            if not est["nombre"] or not est["apellido"] or not est["dni"]:
+                                st.error(f"Por favor complete Nombre, Apellido y DNI del Integrante N° {idx}.")
+                                hubo_error = True
+                                break
 
-                            with st.spinner("Subiendo documentación y guardando..."):
-                                if file_ficha:
-                                    _, ficha_url = subir_archivo_a_drive_via_script(
-                                        file_ficha.read(), f"Ficha_{dni}_{file_ficha.name}", file_ficha.type, FOLDER_FICHAS
-                                    )
-                                if file_aut:
-                                    _, aut_url = subir_archivo_a_drive_via_script(
-                                        file_aut.read(), f"Aut_{dni}_{file_aut.name}", file_aut.type, FOLDER_FICHAS
-                                    )
+                        if not hubo_error:
+                            with st.spinner("Subiendo documentación y guardando integrantes..."):
+                                exito_total = True
+                                
+                                for est in estudiantes_datos:
+                                    dni_val = est["dni"]
+                                    ficha_url = ""
+                                    aut_url = ""
 
-                                datos_estudiante = {
-                                    "nombre": nombre,
-                                    "apellido": apellido,
-                                    "dni": dni,
-                                    "alergias_medicas": alergias,
-                                    "ficha_medica_id": ficha_url,
-                                    "autorizacion_id": aut_url,
-                                    "comentarios": comentarios_participante,
-                                    "rol_mnu": "Delegado/a",
-                                    "id_asignacion": banca_objeto.get("id_asignacion", organo_banca),
-                                }
-                                ok_g, msg_g = guardar_participante_nomina(email_doc_nom, dni, datos_estudiante)
-                                if ok_g:
-                                    st.success(f"✅ ¡{nombre} {apellido} guardado/a con éxito!")
+                                    if est["file_ficha"]:
+                                        _, ficha_url = subir_archivo_a_drive_via_script(
+                                            est["file_ficha"].read(), f"Ficha_{dni_val}_{est['file_ficha'].name}", est["file_ficha"].type, FOLDER_FICHAS
+                                        )
+                                    if est["file_aut"]:
+                                        _, aut_url = subir_archivo_a_drive_via_script(
+                                            est["file_aut"].read(), f"Aut_{dni_val}_{est['file_aut'].name}", est["file_aut"].type, FOLDER_FICHAS
+                                        )
+
+                                    datos_estudiante = {
+                                        "nombre": est["nombre"],
+                                        "apellido": est["apellido"],
+                                        "dni": dni_val,
+                                        "alergias_medicas": est["alergias_medicas"],
+                                        "ficha_medica_id": ficha_url,
+                                        "autorizacion_id": aut_url,
+                                        "comentarios": est["comentarios"],
+                                        "rol_mnu": "Delegado/a",
+                                        "id_asignacion": banca_objeto.get("id_asignacion", organo_banca),
+                                    }
+                                    
+                                    ok_g, msg_g = guardar_participante_nomina(email_doc_nom, dni_val, datos_estudiante)
+                                    if not ok_g:
+                                        exito_total = False
+                                        st.error(f"Error con {est['nombre']}: {msg_g}")
+
+                                if exito_total:
+                                    st.success("✅ ¡Todos los integrantes de la banca fueron guardados con éxito!")
                                     st.rerun()
-                                else:
-                                    st.error(msg_g)
 
                 st.markdown("---")
                 st.markdown("### 🚨 Cierre Oficial de Carga")
