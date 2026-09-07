@@ -46,20 +46,21 @@ def subir_archivo_a_drive_via_script(
             API_URL, json=payload, timeout=60, allow_redirects=True
         )
         
+        # Intentamos parsear la respuesta JSON del Apps Script
         try:
             res_json = res.json()
-            file_url = res_json.get("fileUrl") or res_json.get("url")
-            if file_url and "folders/" not in file_url:
-                return True, file_url
-        except Exception:
-            pass
+            if res_json.get("status") == "success":
+                file_url = res_json.get("fileUrl") or res_json.get("url")
+                if file_url:
+                    return True, file_url
+            else:
+                return False, f"Error del Script: {res_json.get('message', 'Desconocido')}"
+        except Exception as json_err:
+            # Si no es un JSON válido (por ejemplo, devolvió HTML de error de Google), mostramos el texto
+            return False, f"Respuesta inválida del servidor (posible error de permisos o despliegue): {res.text[:200]}"
             
-        if res.status_code == 200:
-            return True, f"https://drive.google.com/drive/folders/{folder_id}"
-            
-        return False, "Google Apps Script no devolvió un enlace de archivo válido."
     except Exception as e:
-        return False, f"Excepción al conectar con la API: {e}"
+        return False, f"Excepción de red al conectar con la API: {e}"
 
 
 def obtener_modelos_activos():
@@ -466,30 +467,40 @@ elif menu == "📋 Carga de Nómina y Documentación":
                                     aut_url = ""
 
                                     if est["file_ficha"]:
-                                        _, ficha_url = subir_archivo_a_drive_via_script(
+                                        ok_f, ficha_url = subir_archivo_a_drive_via_script(
                                             est["file_ficha"].read(), f"Ficha_{dni_val}_{est['file_ficha'].name}", est["file_ficha"].type, FOLDER_FICHAS
                                         )
+                                        if not ok_f:
+                                            st.error(f"Error subiendo ficha de {est['nombre']}: {ficha_url}")
+                                            exito_total = False
+                                            break
+
                                     if est["file_aut"]:
-                                        _, aut_url = subir_archivo_a_drive_via_script(
+                                        ok_a, aut_url = subir_archivo_a_drive_via_script(
                                             est["file_aut"].read(), f"Aut_{dni_val}_{est['file_aut'].name}", est["file_aut"].type, FOLDER_FICHAS
                                         )
+                                        if not ok_a:
+                                            st.error(f"Error subiendo autorización de {est['nombre']}: {aut_url}")
+                                            exito_total = False
+                                            break
 
-                                    datos_estudiante = {
-                                        "nombre": est["nombre"],
-                                        "apellido": est["apellido"],
-                                        "dni": dni_val,
-                                        "alergias_medicas": est["alergias_medicas"],
-                                        "ficha_medica_id": ficha_url,
-                                        "autorizacion_id": aut_url,
-                                        "comentarios": est["comentarios"],
-                                        "rol_mnu": "Delegado/a",
-                                        "id_asignacion": banca_objeto.get("id_asignacion", organo_banca),
-                                    }
-                                    
-                                    ok_g, msg_g = guardar_participante_nomina(email_doc_nom, dni_val, datos_estudiante)
-                                    if not ok_g:
-                                        exito_total = False
-                                        st.error(f"Error con {est['nombre']}: {msg_g}")
+                                    if exito_total:
+                                        datos_estudiante = {
+                                            "nombre": est["nombre"],
+                                            "apellido": est["apellido"],
+                                            "dni": dni_val,
+                                            "alergias_medicas": est["alergias_medicas"],
+                                            "ficha_medica_id": ficha_url,
+                                            "autorizacion_id": aut_url,
+                                            "comentarios": est["comentarios"],
+                                            "rol_mnu": "Delegado/a",
+                                            "id_asignacion": banca_objeto.get("id_asignacion", organo_banca),
+                                        }
+                                        
+                                        ok_g, msg_g = guardar_participante_nomina(email_doc_nom, dni_val, datos_estudiante)
+                                        if not ok_g:
+                                            exito_total = False
+                                            st.error(f"Error guardando en base de datos con {est['nombre']}: {msg_g}")
 
                                 if exito_total:
                                     st.success("✅ ¡Todos los integrantes de la banca fueron guardados con éxito!")
