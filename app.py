@@ -27,10 +27,13 @@ API_URL = st.secrets["API_URL"]
 
 def verificar_credenciales(email, secret_hash):
     try:
+        # Verificamos si existe la delegación por su ID / Email
         doc = db.collection("delegaciones").document(str(email)).get()
         if doc.exists:
             data = doc.to_dict()
+            # Validamos el hash secreto original guardado en la base de datos
             if str(data.get("secret_hash", "")).strip() == str(secret_hash).strip():
+                data["id_delegacion"] = doc.id
                 return data
         return None
     except Exception as e:
@@ -122,6 +125,7 @@ if "docente_autenticado" not in st.session_state:
     st.session_state["docente_autenticado"] = False
     st.session_state["datos_delegacion"] = None
 
+# Control de Autenticación con Clave Hash y Email
 if not st.session_state["docente_autenticado"]:
     st.markdown("### 🔑 Iniciar Sesión Institucional")
     with st.form("form_login_docente"):
@@ -139,7 +143,7 @@ if not st.session_state["docente_autenticado"]:
                 st.error("Credenciales inválidas. Verifique su correo y clave hash.")
     st.stop()
 
-# Si ya está logueado
+# Si ya está logueado correctamente
 delegacion = st.session_state["datos_delegacion"]
 id_del = delegacion.get("id_delegacion") or delegacion.get("docente_email")
 id_modelo = delegacion.get("id_modelo")
@@ -186,7 +190,7 @@ if menu_docente == "📋 Carga de Nómina y Documentación":
 
         # Verificar cuántos hay cargados en esta banca específica
         integrantes_actuales = obtener_integrantes_delegacion(id_del)
-        integrantes_en_banca = [i for i in integrantes_actuales if i.get("id_asignacion") == organo_actual or i.get("pais") == banca_seleccionada.get("pais")]
+        integrantes_en_banca = [i for i in integrantes_actuales if i.get("id_asignacion") == organo_actual or i.get("pais"] == banca_seleccionada.get("pais")]
 
         if len(integrantes_en_banca) >= limite_permitido:
             st.success(f"✅ Ya se completó el cupo de {limite_permitido} estudiante(s) para esta banca ({banca_elegida_label}).")
@@ -209,7 +213,7 @@ if menu_docente == "📋 Carga de Nómina y Documentación":
 
                 if st.form_submit_button("💾 Guardar Participante en Nómina"):
                     if not nombre or not apellido or not dni:
-                        st.error("Por favor,complete Nombre, Apellido y DNI.")
+                        st.error("Por favor, complete Nombre, Apellido y DNI.")
                     else:
                         folder_id = delegacion.get("drive_folder_id", "")
                         ficha_url = ""
@@ -223,7 +227,7 @@ if menu_docente == "📋 Carga de Nómina y Documentación":
                             aut_bytes = file_aut.read()
                             autorizacion_url = subir_archivo_a_drive(aut_bytes, f"Autorizacion_{dni}_{nombre}.pdf", file_aut.type, folder_id) or ""
 
-                        # CORRECCIÓN CLAVE: ID Único combinando DNI y Órgano/Banca para evitar sobreescrituras en bancas dobles
+                        # SOLUCIÓN DEL ERROR DE BANCAS DOBLES: ID único combinando DNI y el órgano asignado
                         org_limpio = str(organo_actual).replace(" ", "_").replace("/", "_").lower()
                         id_documento_estudiante = f"{dni}_{org_limpio}"
 
