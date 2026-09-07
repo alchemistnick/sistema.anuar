@@ -50,21 +50,18 @@ def subir_archivo_a_drive_via_script(
             API_URL, json=payload, timeout=60, allow_redirects=True
         )
         
-        # Intentamos parsear el JSON de respuesta de Google
         try:
             res_json = res.json()
             file_url = res_json.get("fileUrl") or res_json.get("url")
-            if file_url:
+            if file_url and "folders/" not in file_url:
                 return True, file_url
         except Exception:
             pass
             
-        # Si la petición HTTP fue exitosa (200) pero el JSON falló, 
-        # devolvemos un enlace directo a la carpeta para no bloquear al usuario
         if res.status_code == 200:
             return True, f"https://drive.google.com/drive/folders/{folder_id}"
             
-        return False, f"Error del servidor HTTP: {res.status_code}"
+        return False, "Google Apps Script no devolvió un enlace de archivo válido."
     except Exception as e:
         return False, f"Excepción al conectar con la API: {e}"
 
@@ -96,15 +93,20 @@ def obtener_parametros_comites(id_modelo):
 def preinscribir_escuela(datos_escuela):
     try:
         docente_email = str(datos_escuela.get("docente_email", "")).strip().lower()
+        id_modelo_nuevo = str(datos_escuela.get("id_modelo", ""))
+
         if not docente_email or "@" not in docente_email:
             return False, "Debe ingresar un correo electrónico válido."
 
         doc_ref = db.collection("delegaciones").document(docente_email)
-        if doc_ref.get().exists:
-            return (
-                False,
-                f"El correo '{docente_email}' ya se encuentra preinscripto.",
-            )
+        doc_snap = doc_ref.get()
+
+        # Validación flexible: Permitir mismo mail si es para un modelo diferente
+        if doc_snap.exists:
+            datos_existentes = doc_snap.to_dict()
+            modelo_existente = str(datos_existentes.get("id_modelo", ""))
+            if modelo_existente == id_modelo_nuevo:
+                return False, f"El correo '{docente_email}' ya se encuentra preinscripto en este modelo."
 
         payload = {
             "id_delegacion": docente_email,
@@ -113,7 +115,7 @@ def preinscribir_escuela(datos_escuela):
             **datos_escuela,
         }
 
-        doc_ref.set(payload)
+        doc_ref.set(payload, merge=True)
         return True, docente_email
     except Exception as e:
         return False, f"Error al registrar la institución: {e}"
