@@ -46,7 +46,6 @@ def subir_archivo_a_drive_via_script(
             API_URL, json=payload, timeout=60, allow_redirects=True
         )
         
-        # Intentamos parsear la respuesta JSON del Apps Script
         try:
             res_json = res.json()
             if res_json.get("status") == "success":
@@ -56,7 +55,6 @@ def subir_archivo_a_drive_via_script(
             else:
                 return False, f"Error del Script: {res_json.get('message', 'Desconocido')}"
         except Exception as json_err:
-            # Si no es un JSON válido (por ejemplo, devolvió HTML de error de Google), mostramos el texto
             return False, f"Respuesta inválida del servidor (posible error de permisos o despliegue): {res.text[:200]}"
             
     except Exception as e:
@@ -249,11 +247,32 @@ if menu == "📝 Preinscripción Institucional":
 
         if comites:
             secciones = {}
+            exclusiones_map = {}
             for c in comites:
                 sec = str(c.get("clave_seccion", "GENERAL")).strip()
                 if sec not in secciones:
                     secciones[sec] = []
                 secciones[sec].append(c)
+                
+                # Recogemos las exclusiones configuradas por sección
+                excluye_raw = str(c.get("excluye_secciones", "")).strip()
+                if excluye_raw and excluye_raw.lower() != "nan":
+                    exclusiones_map[sec] = [e.strip() for e in excluye_raw.split(",") if e.strip()]
+
+            # Determinamos dinámicamente si alguna sección fue seleccionada con cantidad > 0
+            secciones_activas = []
+            for sec_nombre in secciones.keys():
+                # Leemos la selección temporal en la UI
+                cant_temp = st.session_state.get(f"sec_{sec_nombre}", 0)
+                if cant_temp > 0:
+                    secciones_activas.append(sec_nombre)
+
+            # Verificamos si alguna sección activa bloquea a otras
+            secciones_bloqueadas = set()
+            for sec_activa in secciones_activas:
+                if sec_activa in exclusiones_map:
+                    for bloqueada in exclusiones_map[sec_activa]:
+                        secciones_bloqueadas.add(bloqueada)
 
             for sec_nombre, lista_comites in secciones.items():
                 col_sec, col_cant = st.columns([3, 1])
@@ -267,15 +286,22 @@ if menu == "📝 Preinscripción Institucional":
                         max_permiso = int(val_max)
                         break
 
-                opciones_cant = list(range(0, max_permiso + 1))
-
                 with col_sec:
-                    st.write(f"**Sección {sec_nombre}:** {nombres_comites} (*{integrantes_totales} participantes por delegación - Máx: {max_permiso}*)")
+                    if sec_nombre in secciones_bloqueadas:
+                        st.markdown(f"**Sección {sec_nombre}:** {nombres_comites} ❌ *(Bloqueada por otra selección incompatible)*")
+                    else:
+                        st.write(f"**Sección {sec_nombre}:** {nombres_comites} (*{integrantes_totales} participantes por delegación - Máx: {max_permiso}*)")
+
                 with col_cant:
-                    cant = st.selectbox(f"Cantidad ({sec_nombre}):", options=opciones_cant, key=f"sec_{sec_nombre}")
-                    if cant > 0:
-                        desglose_seleccionado[sec_nombre] = cant
-                        total_cupos_calculados += cant * integrantes_totales
+                    if sec_nombre in secciones_bloqueadas:
+                        # Si está bloqueada, forzamos cantidad a 0 y deshabilitamos
+                        st.number_input(f"Cantidad ({sec_nombre}):", min_value=0, max_value=0, value=0, key=f"sec_{sec_nombre}", disabled=True)
+                    else:
+                        opciones_cant = list(range(0, max_permiso + 1))
+                        cant = st.selectbox(f"Cantidad ({sec_nombre}):", options=opciones_cant, key=f"sec_{sec_nombre}")
+                        if cant > 0:
+                            desglose_seleccionado[sec_nombre] = cant
+                            total_cupos_calculados += cant * integrantes_totales
         else:
             st.warning("⚠️ No se han parametrizado comisiones para este modelo.")
 
