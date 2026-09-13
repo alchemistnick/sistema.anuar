@@ -244,17 +244,16 @@ if menu == "📝 Preinscripción Institucional":
 
         desglose_seleccionado = {}
         total_cupos_calculados = 0
+        exclusiones_map = {}
 
         if comites:
             secciones = {}
-            exclusiones_map = {}
             for c in comites:
                 sec = str(c.get("clave_seccion", "GENERAL")).strip()
                 if sec not in secciones:
                     secciones[sec] = []
                 secciones[sec].append(c)
                 
-                # Recogemos las exclusiones a nivel de sección
                 excluye_raw = str(c.get("excluye_secciones", "")).strip()
                 if excluye_raw and excluye_raw.lower() != "nan":
                     if sec not in exclusiones_map:
@@ -262,19 +261,6 @@ if menu == "📝 Preinscripción Institucional":
                     for e in excluye_raw.split(","):
                         if e.strip():
                             exclusiones_map[sec].add(e.strip())
-
-            # Detectamos qué secciones tienen cantidad seleccionada mayor a 0
-            secciones_activas = []
-            for sec_nombre in secciones.keys():
-                if st.session_state.get(f"sec_{sec_nombre}", 0) > 0:
-                    secciones_activas.append(sec_nombre)
-
-            # Mapeamos qué secciones deben bloquearse por incompatibilidad
-            secciones_bloqueadas = set()
-            for sec_activa in secciones_activas:
-                if sec_activa in exclusiones_map:
-                    for bloqueada in exclusiones_map[sec_activa]:
-                        secciones_bloqueadas.add(bloqueada)
 
             for sec_nombre, lista_comites in secciones.items():
                 col_sec, col_cant = st.columns([3, 1])
@@ -288,57 +274,68 @@ if menu == "📝 Preinscripción Institucional":
                         max_permiso = int(val_max)
                         break
 
-                with col_sec:
-                    if sec_nombre in secciones_bloqueadas:
-                        st.markdown(f"**Sección {sec_nombre}:** {nombres_comites} ❌ *(Bloqueada por incompatibilidad con otra sección seleccionada)*")
-                    else:
-                        st.write(f"**Sección {sec_nombre}:** {nombres_comites} (*{integrantes_totales} participantes por delegación - Máx: {max_permiso}*)")
+                opciones_cant = list(range(0, max_permiso + 1))
 
+                with col_sec:
+                    st.write(f"**Sección {sec_nombre}:** {nombres_comites} (*{integrantes_totales} participantes por delegación - Máx: {max_permiso}*)")
                 with col_cant:
-                    if sec_nombre in secciones_bloqueadas:
-                        st.number_input(f"Cantidad ({sec_nombre}):", min_value=0, max_value=0, value=0, key=f"sec_{sec_nombre}", disabled=True)
-                    else:
-                        opciones_cant = list(range(0, max_permiso + 1))
-                        cant = st.selectbox(f"Cantidad ({sec_nombre}):", options=opciones_cant, key=f"sec_{sec_nombre}")
-                        if cant > 0:
-                            desglose_seleccionado[sec_nombre] = cant
-                            total_cupos_calculados += cant * integrantes_totales
+                    cant = st.selectbox(f"Cantidad ({sec_nombre}):", options=opciones_cant, key=f"sec_{sec_nombre}")
+                    if cant > 0:
+                        desglose_seleccionado[sec_nombre] = cant
+                        total_cupos_calculados += cant * integrantes_totales
         else:
             st.warning("⚠️ No se han parametrizado comisiones para este modelo.")
 
         docentes_acompanantes = st.number_input("Docentes Acompañantes:", min_value=1, value=1, step=1)
         st.info(f"📊 **Total de participantes acumulados:** {total_cupos_calculados} estudiantes.")
 
-        if st.form_submit_button("Enviar Preinscripción Institucional"):
-            if not nombre_colegio or not docente_email or not secret_hash:
-                st.error("Por favor completa los campos obligatorios.")
-            elif total_cupos_calculados == 0:
-                st.error("Seleccione al menos 1 delegación para inscribir.")
-            else:
-                datos_escuela = {
-                    "nombre_colegio": nombre_colegio,
-                    "direccion_escuela": direccion_escuela,
-                    "email_institucional": email_institucional,
-                    "telefono_institucional": telefono_institucional,
-                    "docente_apellido_nombre": docente_apellido_nombre,
-                    "docente_email": docente_email,
-                    "docente_telefono": docente_telefono,
-                    "cupos_solicitados": total_cupos_calculados,
-                    "desglose_modalidades": str(desglose_seleccionado),
-                    "docentes_acompanantes": docentes_acompanantes,
-                    "secret_hash": secret_hash,
-                    "id_modelo": id_modelo_elegido,
-                }
-                ok, msg = preinscribir_escuela(datos_escuela)
-                if ok:
-                    st.success(f"¡Preinscripción exitosa! Su usuario de acceso es: **{docente_email}**.")
-                    notificar_apps_script("NUEVA_PREINSCRIPCION", {
-                        "id_delegacion": docente_email,
-                        "docente_email": docente_email,
-                        "desglose": str(desglose_seleccionado)
-                    })
+        submitted = st.form_submit_button("Enviar Preinscripción Institucional")
+
+        if submitted:
+            # Validamos restricciones de exclusión antes de registrar
+            error_exclusion = False
+            secciones_elegidas = list(desglose_seleccionado.keys())
+            
+            for sec in secciones_elegidas:
+                if sec in exclusiones_map:
+                    for prohibida in exclusiones_map[sec]:
+                        if prohibida in secciones_elegidas:
+                            st.error(f"❌ **Incompatibilidad detectada:** No puede seleccionar simultáneamente las secciones **'{sec}'** y **'{prohibida}'** ya que se excluyen mutuamente.")
+                            error_exclusion = True
+                            break
+                if error_exclusion:
+                    break
+
+            if not error_exclusion:
+                if not nombre_colegio or not docente_email or not secret_hash:
+                    st.error("Por favor completa los campos obligatorios.")
+                elif total_cupos_calculados == 0:
+                    st.error("Seleccione al menos 1 delegación para inscribir.")
                 else:
-                    st.error(msg)
+                    datos_escuela = {
+                        "nombre_colegio": nombre_colegio,
+                        "direccion_escuela": direccion_escuela,
+                        "email_institucional": email_institucional,
+                        "telefono_institucional": telefono_institucional,
+                        "docente_apellido_nombre": docente_apellido_nombre,
+                        "docente_email": docente_email,
+                        "docente_telefono": docente_telefono,
+                        "cupos_solicitados": total_cupos_calculados,
+                        "desglose_modalidades": str(desglose_seleccionado),
+                        "docentes_acompanantes": docentes_acompanantes,
+                        "secret_hash": secret_hash,
+                        "id_modelo": id_modelo_elegido,
+                    }
+                    ok, msg = preinscribir_escuela(datos_escuela)
+                    if ok:
+                        st.success(f"¡Preinscripción exitosa! Su usuario de acceso es: **{docente_email}**.")
+                        notificar_apps_script("NUEVA_PREINSCRIPCION", {
+                            "id_delegacion": docente_email,
+                            "docente_email": docente_email,
+                            "desglose": str(desglose_seleccionado)
+                        })
+                    else:
+                        st.error(msg)
 
 elif menu == "🔑 Ingreso a Mi Delegación":
     st.subheader("🔑 Estado de mi Institución y Asignaciones")
