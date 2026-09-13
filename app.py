@@ -93,11 +93,16 @@ modern_styling = """
 """
 st.markdown(modern_styling, unsafe_allow_html=True)
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate(dict(st.secrets["firebase"]))
-    firebase_admin.initialize_app(cred)
 
-db = firestore.client()
+@st.cache_resource
+def inicializar_firebase():
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(dict(st.secrets["firebase"]))
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
+
+
+db = inicializar_firebase()
 
 # Carga segura y tolerante a fallos de secretos
 try:
@@ -159,6 +164,7 @@ def subir_archivo_a_drive_via_script(
         return False, f"Excepción de red: {e}"
 
 
+@st.cache_data(ttl=600)
 def obtener_modelos_activos():
     try:
         docs = db.collection("modelos").stream()
@@ -168,6 +174,7 @@ def obtener_modelos_activos():
         return []
 
 
+@st.cache_data(ttl=600)
 def obtener_parametros_comites(id_modelo):
     try:
         doc = db.collection("configuracion").document(str(id_modelo)).get()
@@ -227,6 +234,7 @@ def validar_acceso_docente(email_doc, hash_ingresado, id_modelo_login=""):
         return False, f"Error al validar acceso: {e}"
 
 
+@st.cache_data(ttl=60)
 def obtener_bancas_asignadas(id_delegacion_doc):
     try:
         docs = (
