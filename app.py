@@ -80,7 +80,7 @@ def mostrar_encabezado_portal():
         st.markdown(
             """
             <div style="text-align: center; padding: 15px; background: linear-gradient(135deg, rgba(30, 41, 59, 0.05) 0%, rgba(51, 65, 85, 0.1) 100%); border-radius: 16px; border: 1px solid rgba(128, 128, 128, 0.15); margin-bottom: 1rem;">
-                <h2 style="margin: 0; font-size: 1.6rem; font-weight: 900; background: linear-gradient(90deg, #1e293b, #0f172a); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">MUN — ANU-AR</h2>
+                <h2 style="margin: 0; font-size: 1.6rem; font-weight: 900; background: linear-gradient(90deg, #1e293b, #0f172a); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">ANU-AR</h2>
                 <p style="margin: 2px 0 0 0; font-size: 0.85rem; font-weight: 600; opacity: 0.6;">MODELOS DE NACIONES UNIDAS</p>
             </div>
             """,
