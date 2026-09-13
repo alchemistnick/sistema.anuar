@@ -76,19 +76,16 @@ except Exception:
 def mostrar_encabezado_portal():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # URL corregida apuntando correctamente al raw de GitHub
-        logo_url = "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo.jpg"
-        try:
-            st.image(logo_url, use_container_width=True)
-        except Exception:
-            st.markdown(
-                """
-                <div style="text-align: center; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; margin-bottom: 10px;">
-                    <h2 style="margin: 0; color: #2563eb; font-weight: 800;">MUN — ANU-AR</h2>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+        # Contenedor visual institucional garantizado
+        st.markdown(
+            """
+            <div style="text-align: center; padding: 15px; background: linear-gradient(135deg, rgba(30, 41, 59, 0.05) 0%, rgba(51, 65, 85, 0.1) 100%); border-radius: 16px; border: 1px solid rgba(128, 128, 128, 0.15); margin-bottom: 1rem;">
+                <h2 style="margin: 0; font-size: 1.6rem; font-weight: 900; background: linear-gradient(90deg, #1e293b, #0f172a); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">MUN — ANU-AR</h2>
+                <p style="margin: 2px 0 0 0; font-size: 0.85rem; font-weight: 600; opacity: 0.6;">MODELOS DE NACIONES UNIDAS</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         
         st.markdown(
             """
