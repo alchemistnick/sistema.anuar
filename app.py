@@ -202,6 +202,11 @@ if "docente_autenticado" not in st.session_state:
 if "modo_preinscripcion" not in st.session_state:
     st.session_state["modo_preinscripcion"] = False
 
+# Control de limpieza de campos tras envíos exitosos
+if "limpiar_formulario" in st.session_state and st.session_state["limpiar_formulario"]:
+    st.session_state["limpiar_formulario"] = False
+    st.rerun()
+
 # ==========================================
 # VISTA 1: PREINSCRIPCIÓN A NUEVO MODELO
 # ==========================================
@@ -220,7 +225,7 @@ if st.session_state["modo_preinscripcion"]:
     dict_mods_full = {
         m.get("nombre_visible", m.get("id_modelo")): m for m in modelos
     }
-    mod_sel = st.selectbox("Seleccionar Modelo ONU:", list(dict_mods_full.keys()))
+    mod_sel = st.selectbox("Seleccionar Modelo ONU:", list(dict_mods_full.keys()), key="pre_mod_sel")
 
     modelo_objeto = dict_mods_full[mod_sel]
     id_modelo_elegido = modelo_objeto.get("id_modelo")
@@ -230,17 +235,17 @@ if st.session_state["modo_preinscripcion"]:
         st.markdown("### 🏛️ Datos de la Institución (Todos obligatorios)")
         col1, col2 = st.columns(2)
         with col1:
-            nombre_colegio = st.text_input("Nombre de la Institución Educativa (con N° DIPE/CUE) *:")
-            direccion_escuela = st.text_input("Dirección (Localidad, Provincia, País) *:")
-            email_institucional = st.text_input("Correo Electrónico Institucional *:")
-            telefono_institucional = st.text_input("Número de Teléfono *:")
+            nombre_colegio = st.text_input("Nombre de la Institución Educativa (con N° DIPE/CUE) *:", key="pre_nombre")
+            direccion_escuela = st.text_input("Dirección (Localidad, Provincia, País) *:", key="pre_dir")
+            email_institucional = st.text_input("Correo Electrónico Institucional *:", key="pre_email_inst")
+            telefono_institucional = st.text_input("Número de Teléfono *:", key="pre_tel_inst")
 
         with col2:
             st.markdown("### 👨‍🏫 Datos del Responsable / Docente")
-            docente_apellido_nombre = st.text_input("Apellido y Nombre *:")
-            docente_email = st.text_input("Correo Electrónico Docente (Será su usuario) *:").strip().lower()
-            docente_telefono = st.text_input("Teléfono Móvil *:")
-            secret_hash = st.text_input("Crear Clave de Acceso para la Escuela *:", type="password").strip()
+            docente_apellido_nombre = st.text_input("Apellido y Nombre *:", key="pre_doc_nombre")
+            docente_email = st.text_input("Correo Electrónico Docente (Será su usuario) *:", key="pre_doc_email").strip().lower()
+            docente_telefono = st.text_input("Teléfono Móvil *:", key="pre_doc_tel")
+            secret_hash = st.text_input("Crear Clave de Acceso para la Escuela *:", type="password", key="pre_hash").strip()
 
         st.markdown("---")
         st.markdown("### 🇺🇳 Datos de las Delegaciones y Comisiones")
@@ -289,13 +294,20 @@ if st.session_state["modo_preinscripcion"]:
         else:
             st.warning("⚠️ No se han parametrizado comisiones para este modelo.")
 
-        docentes_acompanantes = st.number_input("Docentes Acompañantes:", min_value=1, value=1, step=1)
+        docentes_acompanantes = st.number_input("Docentes Acompañantes:", min_value=1, value=1, step=1, key="pre_acompanantes")
         st.info(f"📊 **Total de participantes acumulados:** {total_cupos_calculados} estudiantes.")
 
-        submitted = st.form_submit_button("Enviar Preinscripción Institucional")
+        # Bloqueo de botón si no hay comités configurados
+        if not comites:
+            st.error("❌ El botón de envío está bloqueado porque este modelo no tiene comisiones parametrizadas.")
+            submitted = st.form_submit_button("Enviar Preinscripción Institucional", disabled=True)
+        else:
+            submitted = st.form_submit_button("Enviar Preinscripción Institucional")
 
         if submitted:
-            if not nombre_colegio.strip() or not direccion_escuela.strip() or not email_institucional.strip() or not telefono_institucional.strip() or not docente_apellido_nombre.strip() or not docente_email.strip() or not docente_telefono.strip() or not secret_hash.strip():
+            if not comites:
+                st.error("❌ No se puede enviar la preinscripción: faltan parametrizar las comisiones.")
+            elif not nombre_colegio.strip() or not direccion_escuela.strip() or not email_institucional.strip() or not telefono_institucional.strip() or not docente_apellido_nombre.strip() or not docente_email.strip() or not docente_telefono.strip() or not secret_hash.strip():
                 st.error("❌ Todos los campos institucionales y del docente son obligatorios.")
             else:
                 error_exclusion = False
@@ -337,6 +349,8 @@ if st.session_state["modo_preinscripcion"]:
                                 "docente_email": docente_email,
                                 "desglose": str(desglose_seleccionado)
                             })
+                            st.session_state["limpiar_formulario"] = True
+                            st.rerun()
                         else:
                             st.error(msg)
 
@@ -351,12 +365,12 @@ elif not st.session_state["docente_autenticado"]:
     id_modelo_ingreso = ""
     if modelos:
         dict_mods_login = {m.get("nombre_visible", m.get("id_modelo")): m.get("id_modelo") for m in modelos}
-        mod_sel_login = st.selectbox("Seleccionar Modelo ONU al que desea ingresar:", list(dict_mods_login.keys()))
+        mod_sel_login = st.selectbox("Seleccionar Modelo ONU al que desea ingresar:", list(dict_mods_login.keys()), key="login_mod_sel")
         id_modelo_ingreso = dict_mods_login[mod_sel_login]
 
     with st.form("form_login_escuela"):
-        email_doc = st.text_input("Email del Docente Responsable:").strip().lower()
-        hash_ingresado = st.text_input("Clave de Acceso:", type="password").strip()
+        email_doc = st.text_input("Email del Docente Responsable:", key="login_email").strip().lower()
+        hash_ingresado = st.text_input("Clave de Acceso:", type="password", key="login_hash").strip()
 
         if st.form_submit_button("Iniciar Sesión"):
             ok, escuela = validar_acceso_docente(email_doc, hash_ingresado, id_modelo_ingreso)
@@ -426,8 +440,8 @@ else:
     elif sub_menu == "Pago":
         st.subheader("💳 Subir Comprobante de Pago")
         with st.form("form_pago_seguro"):
-            monto_pago = st.number_input("Monto Abonado ($):", min_value=0.0, format="%.2f")
-            archivo_comprobante = st.file_uploader("Seleccionar Comprobante de Pago (PDF o Imagen):", type=["pdf", "png", "jpg", "jpeg"])
+            monto_pago = st.number_input("Monto Abonado ($):", min_value=0.0, format="%.2f", key="pago_monto")
+            archivo_comprobante = st.file_uploader("Seleccionar Comprobante de Pago (PDF o Imagen):", type=["pdf", "png", "jpg", "jpeg"], key="pago_archivo")
 
             if st.form_submit_button("Enviar Comprobante"):
                 if not archivo_comprobante:
@@ -458,6 +472,8 @@ else:
                                         "drive_url": res_url,
                                     })
                                     st.balloons()
+                                    st.session_state["limpiar_formulario"] = True
+                                    st.rerun()
                                 else:
                                     st.error(f"Error al registrar en Firestore: {idPago}")
                     except Exception as ex:
@@ -474,7 +490,7 @@ else:
             st.warning("⚠️ Tu institución aún no tiene bancas/países asignados por la organización.")
         else:
             dict_bancas = {f"{b.get('organo_comite', b.get('organo'))} — {b.get('pais')}": b for b in bancas_asignadas}
-            banca_sel_nombre = st.selectbox("Seleccionar Banca / Asignación para cargar participante:", list(dict_bancas.keys()))
+            banca_sel_nombre = st.selectbox("Seleccionar Banca / Asignación para cargar participante:", list(dict_bancas.keys()), key="nom_banca_sel")
             banca_objeto = dict_bancas[banca_sel_nombre]
 
             organo_banca = str(banca_objeto.get("organo_comite", banca_objeto.get("organo"))).strip().upper()
@@ -567,6 +583,7 @@ else:
 
                             if exito_total:
                                 st.success("✅ ¡Todos los integrantes de la banca fueron guardados con éxito!")
+                                st.session_state["limpiar_formulario"] = True
                                 st.rerun()
 
             st.markdown("---")
