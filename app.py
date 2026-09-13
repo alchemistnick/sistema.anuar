@@ -97,7 +97,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 API_URL = st.secrets["api"]["URL"]
 
-# Carga de carpetas ocultas en secretos
+# Carga segura de carpetas desde st.secrets
 FOLDER_COMPROBANTES = st.secrets["drive"]["folder_comprobantes"]
 FOLDER_FICHAS = st.secrets["drive"]["folder_fichas"]
 ESCUDO_URL = "https://cdn-icons-png.flaticon.com/512/330/330455.png"
@@ -515,7 +515,7 @@ else:
                     if any(not e["nombre"] or not e["apellido"] or not e["dni"] for e in estudiantes_datos):
                         st.error("Completa Nombre, Apellido y DNI de todos los integrantes.")
                     else:
-                        exito_ total = True
+                        exito_total = True
                         for est in estudiantes_datos:
                             ficha_url, aut_url = "", ""
                             if est["ficha"]:
