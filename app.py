@@ -93,12 +93,10 @@ def preinscribir_escuela(datos_escuela):
         if not docente_email or "@" not in docente_email:
             return False, "Debe ingresar un correo electrónico válido."
 
-        # Verificamos si ya existe una inscripción con este email PARA EL MISMO MODELO
         docs_existentes = db.collection("delegaciones").where("docente_email", "==", docente_email).where("id_modelo", "==", id_modelo_nuevo).stream()
         if list(docs_existentes):
             return False, f"El correo '{docente_email}' ya se encuentra preinscripto en este modelo específico."
 
-        # Generamos un ID de documento único combinando email y modelo para permitir el mismo mail en diferentes modelos
         id_doc_delegacion = f"{docente_email}_{id_modelo_nuevo}"
         doc_ref = db.collection("delegaciones").document(id_doc_delegacion)
 
@@ -199,30 +197,19 @@ def notificar_apps_script(action, data):
 
 st.title("🏫 Portal de Instituciones - Modelos ONU")
 
-# Control de navegación mediante botones en el sidebar
-if "menu_activo" not in st.session_state:
-    st.session_state["menu_activo"] = "🔑 Ingreso a Mi Delegación"
+if "docente_autenticado" not in st.session_state:
+    st.session_state["docente_autenticado"] = False
+if "modo_preinscripcion" not in st.session_state:
+    st.session_state["modo_preinscripcion"] = False
 
-st.sidebar.markdown("### 🧭 Menú de Navegación")
-if st.sidebar.button("🔑 Ingreso a Mi Delegación", use_container_width=True):
-    st.session_state["menu_activo"] = "🔑 Ingreso a Mi Delegación"
-    st.rerun()
-
-if st.sidebar.button("💳 Subir Comprobante de Pago", use_container_width=True):
-    st.session_state["menu_activo"] = "💳 Subir Comprobante de Pago"
-    st.rerun()
-
-if st.sidebar.button("📋 Carga de Nómina y Documentación", use_container_width=True):
-    st.session_state["menu_activo"] = "📋 Carga de Nómina y Documentación"
-    st.rerun()
-
-menu = st.session_state["menu_activo"]
-
-if menu == "📝 Preinscripción Institucional":
+# ==========================================
+# VISTA 1: PREINSCRIPCIÓN A NUEVO MODELO
+# ==========================================
+if st.session_state["modo_preinscripcion"]:
     st.subheader("📝 Formulario de Preinscripción Escolar")
 
     if st.button("⬅️ Volver al Inicio de Sesión"):
-        st.session_state["menu_activo"] = "🔑 Ingreso a Mi Delegación"
+        st.session_state["modo_preinscripcion"] = False
         st.rerun()
 
     modelos = obtener_modelos_activos()
@@ -308,7 +295,6 @@ if menu == "📝 Preinscripción Institucional":
         submitted = st.form_submit_button("Enviar Preinscripción Institucional")
 
         if submitted:
-            # Validación de campos obligatorios
             if not nombre_colegio.strip() or not direccion_escuela.strip() or not email_institucional.strip() or not telefono_institucional.strip() or not docente_apellido_nombre.strip() or not docente_email.strip() or not docente_telefono.strip() or not secret_hash.strip():
                 st.error("❌ Todos los campos institucionales y del docente son obligatorios.")
             else:
@@ -354,8 +340,12 @@ if menu == "📝 Preinscripción Institucional":
                         else:
                             st.error(msg)
 
-elif menu == "🔑 Ingreso a Mi Delegación":
-    st.subheader("🔑 Estado de mi Institución y Asignaciones")
+# ==========================================
+# VISTA 2: PANTALLA DE INICIO DE SESIÓN
+# ==========================================
+elif not st.session_state["docente_autenticado"]:
+    st.subheader("🔑 Inicio de Sesión - Portal de Instituciones")
+    st.markdown("Ingrese sus credenciales institucionales para acceder a los módulos de gestión.")
 
     modelos = obtener_modelos_activos()
     id_modelo_ingreso = ""
@@ -368,56 +358,85 @@ elif menu == "🔑 Ingreso a Mi Delegación":
         email_doc = st.text_input("Email del Docente Responsable:").strip().lower()
         hash_ingresado = st.text_input("Clave de Acceso:", type="password").strip()
 
-        if st.form_submit_button("Consultar Estado"):
+        if st.form_submit_button("Iniciar Sesión"):
             ok, escuela = validar_acceso_docente(email_doc, hash_ingresado, id_modelo_ingreso)
             if ok:
-                st.success("¡Acceso correcto!")
+                st.session_state["docente_autenticado"] = True
                 st.session_state["id_delegacion_activa"] = escuela.get("id")
                 st.session_state["escuela_info"] = escuela
-                st.markdown(f"### 🏛️ {escuela.get('nombre_colegio')}")
-                bancas = obtener_bancas_asignadas(escuela.get("id"))
-                if bancas:
-                    for b in bancas:
-                        st.write(f"- **{b.get('organo_comite', b.get('organo'))}** — País: **{b.get('pais')}**")
-                else:
-                    st.info("Aún no se han publicado las bancas asignadas.")
+                st.session_state["id_modelo_activo"] = id_modelo_ingreso
+                st.success("¡Acceso correcto! Cargando módulos...")
+                st.rerun()
             else:
                 st.error(escuela)
 
     st.markdown("---")
     st.markdown("### ¿Desea inscribirse a un Modelo nuevo?")
-    if st.button("📝 Ir al Formulario de Preinscripción a Nuevo Modelo"):
-        st.session_state["menu_activo"] = "📝 Preinscripción Institucional"
+    if st.button("📝 Inscribirme a un Modelo Nuevo"):
+        st.session_state["modo_preinscripcion"] = True
         st.rerun()
 
-elif menu == "💳 Subir Comprobante de Pago":
-    st.subheader("💳 Subir Comprobante de Pago")
+# ==========================================
+# VISTA 3: MÓDULOS HABILITADOS TRAS EL LOGIN
+# ==========================================
+else:
+    escuela_actual = st.session_state["escuela_info"]
+    id_del_activo = st.session_state["id_delegacion_activa"]
+    id_modelo_activo = st.session_state.get("id_modelo_activo", "")
 
-    modelos = obtener_modelos_activos()
-    id_modelo_pago = ""
-    if modelos:
-        dict_mods_pago = {m.get("nombre_visible", m.get("id_modelo")): m.get("id_modelo") for m in modelos}
-        mod_sel_pago = st.selectbox("Seleccionar Modelo ONU:", list(dict_mods_pago.keys()), key="sel_mod_pago")
-        id_modelo_pago = dict_mods_pago[mod_sel_pago]
+    st.sidebar.markdown(f"**🏛️ Institución:** {escuela_actual.get('nombre_colegio')}")
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🧭 Menú de Gestión Segura")
 
-    with st.form("form_pago"):
-        email_doc = st.text_input("Email del Docente Responsable:").strip().lower()
-        hash_pago = st.text_input("Clave de Acceso:", type="password").strip()
-        monto_pago = st.number_input("Monto Abonado ($):", min_value=0.0, format="%.2f")
-        archivo_comprobante = st.file_uploader("Seleccionar Comprobante de Pago (PDF o Imagen):", type=["pdf", "png", "jpg", "jpeg"])
+    if st.sidebar.button("📊 Estado de mi Institución", use_container_width=True):
+        st.session_state["sub_menu"] = "Estado"
+        st.rerun()
+    if st.sidebar.button("💳 Subir Comprobante de Pago", use_container_width=True):
+        st.session_state["sub_menu"] = "Pago"
+        st.rerun()
+    if st.sidebar.button("📋 Carga de Nómina y Documentación", use_container_width=True):
+        st.session_state["sub_menu"] = "Nomina"
+        st.rerun()
+    
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
+        st.session_state["docente_autenticado"] = False
+        st.session_state["id_delegacion_activa"] = None
+        st.session_state["escuela_info"] = None
+        st.rerun()
 
-        if st.form_submit_button("Enviar Comprobante"):
-            if not email_doc or not hash_pago or not archivo_comprobante:
-                st.error("Completa todos los campos y adjunta el comprobante.")
-            else:
-                ok_val, escuela = validar_acceso_docente(email_doc, hash_pago, id_modelo_pago)
-                if not ok_val:
-                    st.error(f"Error de acceso: {escuela}")
+    if "sub_menu" not in st.session_state:
+        st.session_state["sub_menu"] = "Estado"
+
+    sub_menu = st.session_state["sub_menu"]
+
+    if sub_menu == "Estado":
+        st.subheader("🔑 Estado de mi Institución y Asignaciones")
+        st.markdown(f"### 🏛️ {escuela_actual.get('nombre_colegio')}")
+        st.info(f"Estado actual del legajo: **{escuela_actual.get('estado', 'PREINSCRIPTO')}**")
+        
+        bancas = obtener_bancas_asignadas(id_del_activo)
+        if bancas:
+            st.markdown("#### 🌍 Bancas / Países Asignados:")
+            for b in bancas:
+                st.write(f"- **{b.get('organo_comite', b.get('organo'))}** — País: **{b.get('pais')}**")
+        else:
+            st.info("Aún no se han publicado las bancas asignadas para tu institución.")
+
+    elif sub_menu == "Pago":
+        st.subheader("💳 Subir Comprobante de Pago")
+        with st.form("form_pago_seguro"):
+            monto_pago = st.number_input("Monto Abonado ($):", min_value=0.0, format="%.2f")
+            archivo_comprobante = st.file_uploader("Seleccionar Comprobante de Pago (PDF o Imagen):", type=["pdf", "png", "jpg", "jpeg"])
+
+            if st.form_submit_button("Enviar Comprobante"):
+                if not archivo_comprobante:
+                    st.error("Adjunta el archivo del comprobante.")
                 else:
                     try:
                         with st.spinner("Subiendo comprobante a Google Drive..."):
                             file_bytes = archivo_comprobante.read()
-                            file_name = f"Pago_{email_doc}_{archivo_comprobante.name}"
+                            file_name = f"Pago_{escuela_actual.get('docente_email')}_{archivo_comprobante.name}"
                             mime_type = archivo_comprobante.type
 
                             ok_subida, res_url = subir_archivo_a_drive_via_script(
@@ -427,15 +446,14 @@ elif menu == "💳 Subir Comprobante de Pago":
                             if not ok_subida:
                                 st.error(f"No se pudo completar la subida del archivo: {res_url}")
                             else:
-                                id_del_doc = escuela.get("id")
                                 ok_pago, idPago = registrar_pago_comprobante(
-                                    id_del_doc, email_doc, id_modelo_pago, float(monto_pago), res_url
+                                    id_del_activo, escuela_actual.get('docente_email'), id_modelo_activo, float(monto_pago), res_url
                                 )
                                 
                                 if ok_pago:
                                     st.success(f"¡Comprobante subido y registrado con éxito! ID: `{idPago}`")
                                     notificar_apps_script("NUEVO_PAGO_REGISTRADO", {
-                                        "id_delegacion": id_del_doc,
+                                        "id_delegacion": id_del_activo,
                                         "monto": float(monto_pago),
                                         "drive_url": res_url,
                                     })
@@ -445,149 +463,120 @@ elif menu == "💳 Subir Comprobante de Pago":
                     except Exception as ex:
                         st.error(f"Error crítico: {ex}")
 
-elif menu == "📋 Carga de Nómina y Documentación":
-    st.subheader("📋 Registro de Participantes y Documentación")
+    elif sub_menu == "Nomina":
+        st.subheader("📋 Registro de Participantes y Documentación")
+        
+        bancas_asignadas = obtener_bancas_asignadas(id_del_activo)
+        comites_reglas = obtener_parametros_comites(id_modelo_activo)
+        mapa_reglas = {str(c.get("organo_comite")).strip().upper(): c for c in comites_reglas}
 
-    modelos = obtener_modelos_activos()
-    id_modelo_nom = ""
-    if modelos:
-        dict_mods_nom = {m.get("nombre_visible", m.get("id_modelo")): m.get("id_modelo") for m in modelos}
-        mod_sel_nom = st.selectbox("Seleccionar Modelo ONU:", list(dict_mods_nom.keys()), key="sel_mod_nom")
-        id_modelo_nom = dict_mods_nom[mod_sel_nom]
+        if not bancas_asignadas:
+            st.warning("⚠️ Tu institución aún no tiene bancas/países asignados por la organización.")
+        else:
+            dict_bancas = {f"{b.get('organo_comite', b.get('organo'))} — {b.get('pais')}": b for b in bancas_asignadas}
+            banca_sel_nombre = st.selectbox("Seleccionar Banca / Asignación para cargar participante:", list(dict_bancas.keys()))
+            banca_objeto = dict_bancas[banca_sel_nombre]
 
-    with st.form("form_verif_nomina"):
-        st.markdown("### 🔑 Acceso al Legajo Escolar")
-        email_doc_nom = st.text_input("Email del Docente Responsable:").strip().lower()
-        hash_nom = st.text_input("Clave de Acceso:", type="password").strip()
-        if st.form_submit_button("Ingresar a Carga de Nómina"):
-            ok_acc, escuela_obj = validar_acceso_docente(email_doc_nom, hash_nom, id_modelo_nom)
-            if ok_acc:
-                st.session_state["id_del_doc_nom"] = escuela_obj.get("id")
-                st.session_state["hash_nom"] = hash_nom
-                st.success("¡Acceso correcto! Puede cargar los integrantes abajo.")
-            else:
-                st.error("❌ Email o contraseña incorrecta para este modelo.")
+            organo_banca = str(banca_objeto.get("organo_comite", banca_objeto.get("organo"))).strip().upper()
+            regla_comite = mapa_reglas.get(organo_banca, {})
+            integrantes_permitidos = int(regla_comite.get("integrantes_por_banca", 2))
 
-    if "id_del_doc_nom" in st.session_state and st.session_state["id_del_doc_nom"]:
-        id_del_doc_nom = st.session_state["id_del_doc_nom"]
-        hash_nom = st.session_state.get("hash_nom", "")
+            st.info(f"📌 El órgano **{organo_banca}** requiere/permite hasta **{integrantes_permitidos} estudiante(s)**. Complete los campos correspondientes a continuación:")
 
-        ok_acc, escuela = validar_acceso_docente(email_doc_nom, hash_nom, id_modelo_nom)
+            with st.form("form_estudiante_multiple"):
+                estudiantes_datos = []
+                
+                for i in range(1, integrantes_permitidos + 1):
+                    st.markdown(f"#### 👤 Integrante N° {i}")
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        nombre = st.text_input(f"Nombre del Estudiante {i}:", key=f"nombre_{i}")
+                        apellido = st.text_input(f"Apellido {i}:", key=f"apellido_{i}")
+                        dni = st.text_input(f"DNI {i}:", key=f"dni_{i}")
+                    with col_b:
+                        alergias = st.text_input(f"Alergias / Condición Médica {i}:", value="Ninguna", key=f"alergias_{i}")
+                        file_ficha = st.file_uploader(f"Ficha Médica N° {i} (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"], key=f"ficha_{i}")
+                        file_aut = st.file_uploader(f"Autorización Firmada N° {i} (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"], key=f"aut_{i}")
 
-        if ok_acc:
-            st.success(f"🏛️ **Institución:** {escuela.get('nombre_colegio')} (`{email_doc_nom}`)")
-
-            bancas_asignadas = obtener_bancas_asignadas(id_del_doc_nom)
-            comites_reglas = obtener_parametros_comites(id_modelo_nom)
-            mapa_reglas = {str(c.get("organo_comite")).strip().upper(): c for c in comites_reglas}
-
-            if not bancas_asignadas:
-                st.warning("⚠️ Tu institución aún no tiene bancas/países asignados por la organización.")
-            else:
-                dict_bancas = {f"{b.get('organo_comite', b.get('organo'))} — {b.get('pais')}": b for b in bancas_asignadas}
-                banca_sel_nombre = st.selectbox("Seleccionar Banca / Asignación para cargar participante:", list(dict_bancas.keys()))
-                banca_objeto = dict_bancas[banca_sel_nombre]
-
-                organo_banca = str(banca_objeto.get("organo_comite", banca_objeto.get("organo"))).strip().upper()
-                regla_comite = mapa_reglas.get(organo_banca, {})
-                integrantes_permitidos = int(regla_comite.get("integrantes_por_banca", 2))
-
-                st.info(f"📌 El órgano **{organo_banca}** requiere/permite hasta **{integrantes_permitidos} estudiante(s)**. Complete los campos correspondientes a continuación:")
-
-                with st.form("form_estudiante_multiple"):
-                    estudiantes_datos = []
+                    comentarios_participante = st.text_area(f"Comentarios / Observaciones sobre el integrante {i} (opcional):", key=f"comentarios_{i}")
+                    st.markdown("---")
                     
-                    for i in range(1, integrantes_permitidos + 1):
-                        st.markdown(f"#### 👤 Integrante N° {i}")
-                        col_a, col_b = st.columns(2)
-                        with col_a:
-                            nombre = st.text_input(f"Nombre del Estudiante {i}:", key=f"nombre_{i}")
-                            apellido = st.text_input(f"Apellido {i}:", key=f"apellido_{i}")
-                            dni = st.text_input(f"DNI {i}:", key=f"dni_{i}")
-                        with col_b:
-                            alergias = st.text_input(f"Alergias / Condición Médica {i}:", value="Ninguna", key=f"alergias_{i}")
-                            file_ficha = st.file_uploader(f"Ficha Médica N° {i} (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"], key=f"ficha_{i}")
-                            file_aut = st.file_uploader(f"Autorización Firmada N° {i} (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"], key=f"aut_{i}")
+                    estudiantes_datos.append({
+                        "nombre": nombre,
+                        "apellido": apellido,
+                        "dni": dni,
+                        "alergias_medicas": alergias,
+                        "file_ficha": file_ficha,
+                        "file_aut": file_aut,
+                        "comentarios": comentarios_participante
+                    })
 
-                        comentarios_participante = st.text_area(f"Comentarios / Observaciones sobre el integrante {i} (opcional):", key=f"comentarios_{i}")
-                        st.markdown("---")
-                        
-                        estudiantes_datos.append({
-                            "nombre": nombre,
-                            "apellido": apellido,
-                            "dni": dni,
-                            "alergias_medicas": alergias,
-                            "file_ficha": file_ficha,
-                            "file_aut": file_aut,
-                            "comentarios": comentarios_participante
-                        })
+                if st.form_submit_button("💾 Guardar Todos los Integrantes de esta Banca"):
+                    hubo_error = False
+                    
+                    for idx, est in enumerate(estudiantes_datos, start=1):
+                        if not est["nombre"] or not est["apellido"] or not est["dni"]:
+                            st.error(f"Por favor complete Nombre, Apellido y DNI del Integrante N° {idx}.")
+                            hubo_error = True
+                            break
 
-                    if st.form_submit_button("💾 Guardar Todos los Integrantes de esta Banca"):
-                        hubo_error = False
-                        
-                        for idx, est in enumerate(estudiantes_datos, start=1):
-                            if not est["nombre"] or not est["apellido"] or not est["dni"]:
-                                st.error(f"Por favor complete Nombre, Apellido y DNI del Integrante N° {idx}.")
-                                hubo_error = True
-                                break
+                    if not hubo_error:
+                        with st.spinner("Subiendo documentación y guardando integrantes..."):
+                            exito_total = True
+                            
+                            for est in estudiantes_datos:
+                                dni_val = est["dni"]
+                                ficha_url = ""
+                                aut_url = ""
 
-                        if not hubo_error:
-                            with st.spinner("Subiendo documentación y guardando integrantes..."):
-                                exito_total = True
-                                
-                                for est in estudiantes_datos:
-                                    dni_val = est["dni"]
-                                    ficha_url = ""
-                                    aut_url = ""
+                                if est["file_ficha"]:
+                                    ok_f, ficha_url = subir_archivo_a_drive_via_script(
+                                        est["file_ficha"].read(), f"Ficha_{dni_val}_{est['file_ficha'].name}", est["file_ficha"].type, FOLDER_FICHAS
+                                    )
+                                    if not ok_f:
+                                        st.error(f"Error subiendo ficha de {est['nombre']}: {ficha_url}")
+                                        exito_total = False
+                                        break
 
-                                    if est["file_ficha"]:
-                                        ok_f, ficha_url = subir_archivo_a_drive_via_script(
-                                            est["file_ficha"].read(), f"Ficha_{dni_val}_{est['file_ficha'].name}", est["file_ficha"].type, FOLDER_FICHAS
-                                        )
-                                        if not ok_f:
-                                            st.error(f"Error subiendo ficha de {est['nombre']}: {ficha_url}")
-                                            exito_total = False
-                                            break
-
-                                    if est["file_aut"]:
-                                        ok_a, aut_url = subir_archivo_a_drive_via_script(
-                                            est["file_aut"].read(), f"Aut_{dni_val}_{est['file_aut'].name}", est["file_aut"].type, FOLDER_FICHAS
-                                        )
-                                        if not ok_a:
-                                            st.error(f"Error subiendo autorización de {est['nombre']}: {aut_url}")
-                                            exito_total = False
-                                            break
-
-                                    if exito_total:
-                                        datos_estudiante = {
-                                            "nombre": est["nombre"],
-                                            "apellido": est["apellido"],
-                                            "dni": dni_val,
-                                            "alergias_medicas": est["alergias_medicas"],
-                                            "ficha_medica_id": ficha_url,
-                                            "autorizacion_id": aut_url,
-                                            "comentarios": est["comentarios"],
-                                            "rol_mnu": "Delegado/a",
-                                            "id_asignacion": banca_objeto.get("id_asignacion", organo_banca),
-                                        }
-                                        
-                                        ok_g, msg_g = guardar_participante_nomina(id_del_doc_nom, dni_val, datos_estudiante)
-                                        if not ok_g:
-                                            exito_total = False
-                                            st.error(f"Error guardando en base de datos con {est['nombre']}: {msg_g}")
+                                if est["file_aut"]:
+                                    ok_a, aut_url = subir_archivo_a_drive_via_script(
+                                        est["file_aut"].read(), f"Aut_{dni_val}_{est['file_aut'].name}", est["file_aut"].type, FOLDER_FICHAS
+                                    )
+                                    if not ok_a:
+                                        st.error(f"Error subiendo autorización de {est['nombre']}: {aut_url}")
+                                        exito_total = False
+                                        break
 
                                 if exito_total:
-                                    st.success("✅ ¡Todos los integrantes de la banca fueron guardados con éxito!")
-                                    st.rerun()
+                                    datos_estudiante = {
+                                        "nombre": est["nombre"],
+                                        "apellido": est["apellido"],
+                                        "dni": dni_val,
+                                        "alergias_medicas": est["alergias_medicas"],
+                                        "ficha_medica_id": ficha_url,
+                                        "autorizacion_id": aut_url,
+                                        "comentarios": est["comentarios"],
+                                        "rol_mnu": "Delegado/a",
+                                        "id_asignacion": banca_objeto.get("id_asignacion", organo_banca),
+                                    }
+                                    
+                                    ok_g, msg_g = guardar_participante_nomina(id_del_activo, dni_val, datos_estudiante)
+                                    if not ok_g:
+                                        exito_total = False
+                                        st.error(f"Error guardando en base de datos con {est['nombre']}: {msg_g}")
 
-                st.markdown("---")
-                st.markdown("### 🚨 Cierre Oficial de Carga")
-                if st.button("🔴 CONFIRMAR CARGA COMPLETA DE TODA LA DELEGACIÓN"):
-                    actualizar_estado_legajo(id_del_doc_nom, "CARGA_COMPLETA")
-                    notificar_apps_script("CONFIRMAR_CARGA_DOCUMENTACION", {
-                        "id_delegacion": id_del_doc_nom,
-                        "secret_hash": hash_nom,
-                        "email_docente": email_doc_nom,
-                    })
-                    st.balloons()
-                    st.success("🎉 ¡Carga de documentación confirmada con éxito!")
+                            if exito_total:
+                                st.success("✅ ¡Todos los integrantes de la banca fueron guardados con éxito!")
+                                st.rerun()
+
+            st.markdown("---")
+            st.markdown("### 🚨 Cierre Oficial de Carga")
+            if st.button("🔴 CONFIRMAR CARGA COMPLETA DE TODA LA DELEGACIÓN"):
+                actualizar_estado_legajo(id_del_activo, "CARGA_COMPLETA")
+                notificar_apps_script("CONFIRMAR_CARGA_DOCUMENTACION", {
+                    "id_delegacion": id_del_activo,
+                    "secret_hash": escuela_actual.get("secret_hash"),
+                    "email_docente": escuela_actual.get("docente_email"),
+                })
+                st.balloons()
+                st.success("🎉 ¡Carga de documentación confirmada con éxito!")
