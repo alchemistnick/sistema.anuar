@@ -76,23 +76,11 @@ except Exception:
 def mostrar_encabezado_portal():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # Intento de carga directa desde GitHub crudo o usando una imagen por respaldo segura
-        logo_urls = [
-            "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo",
-            "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo.png",
-            "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo.jpeg"
-        ]
-        
-        imagen_cargada = False
-        for url in logo_urls:
-            try:
-                st.image(url, use_container_width=True)
-                imagen_cargada = True
-                break
-            except Exception:
-                continue
-                
-        if not imagen_cargada:
+        # Apunta a logo.png en la rama main de tu repositorio (recuerda renombrarlo en GitHub)
+        logo_url = "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo.png"
+        try:
+            st.image(logo_url, use_container_width=True)
+        except Exception:
             st.markdown(
                 """
                 <div style="text-align: center; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; margin-bottom: 10px;">
@@ -284,6 +272,16 @@ if "limpiar_formulario" in st.session_state and st.session_state["limpiar_formul
 
 if st.session_state["modo_preinscripcion"]:
     st.subheader("📝 Formulario de Preinscripción Escolar")
+    
+    with st.expander("ℹ️ Instrucciones para la Preinscripción (Hacer clic para abrir)", expanded=True):
+        st.markdown("""
+        Bienvenido al proceso de preinscripción institucional. Por favor, siga las siguientes indicaciones:
+        1. **Seleccione el Modelo ONU** correspondiente en el menú desplegable.
+        2. **Complete los datos de la institución** (Nombre, dirección, correo y teléfono institucional).
+        3. **Complete los datos del docente responsable** (Apellido y nombre, correo electrónico que usará como usuario y su **Clave de Acceso** personal).
+        4. **Seleccione la cantidad de delegaciones** requeridas por sección o comisión teniendo en cuenta los cupos máximos permitidos.
+        5. Presione el botón **'Enviar Preinscripción'**. Una vez registrado, podrá iniciar sesión con su correo y contraseña.
+        """)
 
     if st.button("⬅️ Volver al Inicio de Sesión"):
         st.session_state["modo_preinscripcion"] = False
@@ -418,6 +416,14 @@ if st.session_state["modo_preinscripcion"]:
 elif not st.session_state["docente_autenticado"]:
     st.subheader("🔑 Inicio de Sesión - Portal de Instituciones")
     
+    with st.expander("ℹ️ Instrucciones para el Acceso", expanded=False):
+        st.markdown("""
+        - Seleccione el **Modelo ONU** en el que se preinscribió.
+        - Ingrese el **Correo Electrónico** del docente responsable registrado.
+        - Ingrese la **Clave de Acceso** que configuró al momento de enviar su formulario de preinscripción.
+        - Si aún no se ha preinscripto, utilice el botón inferior para registrar a su institución.
+        """)
+    
     modelos = obtener_modelos_activos()
     id_modelo_ingreso = ""
     if modelos:
@@ -474,6 +480,13 @@ else:
 
     if sub_menu == "Estado":
         st.subheader("🔑 Estado de mi Institución y Asignaciones")
+        
+        with st.expander("ℹ️ Instrucciones de esta sección", expanded=True):
+            st.markdown("""
+            - Aquí podrá visualizar el estado actual del legajo de su institución.
+            - Una vez que la secretaría del modelo procese las asignaciones, verá en este apartado los países y comités otorgados a su delegación.
+            """)
+
         st.info(f"Estado del legajo: **{escuela_actual.get('estado', 'PREINSCRIPTO')}**")
         
         bancas = obtener_bancas_asignadas(id_del_activo)
@@ -486,6 +499,14 @@ else:
 
     elif sub_menu == "Pago":
         st.subheader("💳 Subir Comprobante de Pago")
+        
+        with st.expander("ℹ️ Instrucciones para la Subida de Pagos", expanded=True):
+            st.markdown("""
+            - Ingrese el monto exacto abonado en pesos según la transferencia o pago realizado.
+            - Adjunte el archivo digital de su comprobante (formatos aceptados: **PDF, PNG, JPG, JPEG**).
+            - Al presionar **'Enviar Comprobante'**, el archivo se almacenará de forma segura y quedará pendiente de validación por parte de administración.
+            """)
+
         with st.form("form_pago_seguro"):
             monto_pago = st.number_input("Monto Abonado ($):", min_value=0.0, format="%.2f", key="pago_monto")
             archivo_comprobante = st.file_uploader("Comprobante (PDF/Imagen):", type=["pdf", "png", "jpg", "jpeg"], key="pago_archivo")
@@ -509,6 +530,15 @@ else:
 
     elif sub_menu == "Nomina":
         st.subheader("📋 Registro de Participantes y Documentación")
+        
+        with st.expander("ℹ️ Instrucciones para la Carga de Nómina", expanded=True):
+            st.markdown("""
+            - Seleccione la banca o comisión asignada a su institución en el selector inferior.
+            - Complete obligatoriamente el **Nombre, Apellido y DNI** de cada estudiante integrante de dicha banca según los cupos permitidos.
+            - Adjunte individualmente la **Ficha Médica** y la **Autorización firmada** de cada participante en formato digital (PDF o Imagen).
+            - Al finalizar, presione **'Guardar Integrantes'**.
+            """)
+
         bancas_asignadas = obtener_bancas_asignadas(id_del_activo)
         comites_reglas = obtener_parametros_comites(id_modelo_activo)
         mapa_reglas = {str(c.get("organo_comite")).strip().upper(): c for c in comites_reglas}
