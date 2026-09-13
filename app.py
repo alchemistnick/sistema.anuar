@@ -41,21 +41,6 @@ modern_styling = """
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    
-    .portal-title-container h1 {
-        font-size: 1.8rem;
-        font-weight: 800;
-        margin: 0;
-        background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    
-    .portal-title-container p {
-        margin: 0;
-        font-size: 0.95rem;
-        opacity: 0.75;
-    }
     </style>
 """
 st.markdown(modern_styling, unsafe_allow_html=True)
@@ -87,8 +72,8 @@ try:
 except Exception:
     FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
 
-# URL directa del archivo 'logo' en GitHub (asegúrate de incluir la extensión ej: logo.png o logo.jpg tanto aquí como en tu repositorio)
-LOGO_URL = "https://raw.githubusercontent.com/tu_usuario/tu_repositorio/main/logo.png"
+# URL directa y corregida al archivo 'logo' en tu repositorio de GitHub
+LOGO_URL = "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo"
 
 
 def mostrar_encabezado_portal():
@@ -97,11 +82,11 @@ def mostrar_encabezado_portal():
         try:
             st.image(LOGO_URL, use_container_width=True)
         except Exception:
-            st.warning("⚠️ No se pudo cargar la imagen del logo desde la ruta especificada.")
+            pass
         
         st.markdown(
             """
-            <div style="text-align: center; margin-top: -10px; margin-bottom: 2rem;">
+            <div style="text-align: center; margin-top: -5px; margin-bottom: 2rem;">
                 <h1 style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(90deg, #3b82f6, #1d4ed8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Portal de Instituciones</h1>
                 <p style="margin: 0; font-size: 0.95rem; opacity: 0.75;">Gestión Oficial y Preinscripciones — Modelos ONU</p>
             </div>
