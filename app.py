@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Estilo moderno adaptable a Modo Oscuro y Claro con diseño centrado para el logo
+# Estilo moderno adaptable a Modo Oscuro y Claro
 modern_styling = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -18,7 +18,7 @@ modern_styling = """
     footer {visibility: hidden;}
     
     .block-container {
-        padding-top: 2rem;
+        padding-top: 1rem;
         padding-bottom: 2rem;
     }
     
@@ -42,27 +42,6 @@ modern_styling = """
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     
-    .portal-header {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        gap: 15px;
-        padding: 1.5rem;
-        margin-bottom: 2rem;
-        border-radius: 16px;
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.05) 0%, rgba(51, 65, 85, 0.1) 100%);
-        border: 1px solid rgba(128, 128, 128, 0.15);
-    }
-    
-    .portal-logo {
-        max-width: 220px;
-        height: auto;
-        object-fit: contain;
-        filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
-    }
-    
     .portal-title-container h1 {
         font-size: 1.8rem;
         font-weight: 800;
@@ -76,18 +55,6 @@ modern_styling = """
         margin: 0;
         font-size: 0.95rem;
         opacity: 0.75;
-    }
-
-    @media (max-width: 768px) {
-        .portal-header {
-            padding: 1rem;
-        }
-        .portal-logo {
-            max-width: 160px;
-        }
-        .portal-title-container h1 {
-            font-size: 1.4rem;
-        }
     }
     </style>
 """
@@ -120,23 +87,27 @@ try:
 except Exception:
     FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
 
-# URL directa del archivo 'logo' en GitHub (reemplaza 'tu_usuario', 'tu_repositorio' y la rama de ser necesario, ej: 'main')
-LOGO_URL = "https://raw.githubusercontent.com/tu_usuario/tu_repositorio/main/logo"
+# URL directa del archivo 'logo' en GitHub (asegúrate de incluir la extensión ej: logo.png o logo.jpg tanto aquí como en tu repositorio)
+LOGO_URL = "https://raw.githubusercontent.com/tu_usuario/tu_repositorio/main/logo.png"
 
 
 def mostrar_encabezado_portal():
-    st.markdown(
-        f"""
-        <div class="portal-header">
-            <img src="{LOGO_URL}" class="portal-logo" alt="Escudo ANU-AR MUN">
-            <div class="portal-title-container">
-                <h1>Portal de Instituciones</h1>
-                <p>Gestión Oficial y Preinscripciones — Modelos ONU</p>
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        try:
+            st.image(LOGO_URL, use_container_width=True)
+        except Exception:
+            st.warning("⚠️ No se pudo cargar la imagen del logo desde la ruta especificada.")
+        
+        st.markdown(
+            """
+            <div style="text-align: center; margin-top: -10px; margin-bottom: 2rem;">
+                <h1 style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(90deg, #3b82f6, #1d4ed8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Portal de Instituciones</h1>
+                <p style="margin: 0; font-size: 0.95rem; opacity: 0.75;">Gestión Oficial y Preinscripciones — Modelos ONU</p>
             </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def subir_archivo_a_drive_via_script(
