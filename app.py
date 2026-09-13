@@ -192,11 +192,11 @@ if st.session_state["modo_preinscripcion"]:
         desglose_seleccionado = {}
         total_cupos = 0
         if comites:
-            for c in comites:
+            for idx, c in enumerate(comites):
                 sec = str(c.get("clave_seccion", "GENERAL")).strip()
-                cant = st.number_input(f"Cantidad delegaciones sección {sec}:", min_value=0, value=0, key=f"sec_{sec}")
+                cant = st.number_input(f"Cantidad delegaciones sección {sec}:", min_value=0, value=0, key=f"sec_{sec}_{idx}")
                 if cant > 0:
-                    desglose_seleccionado[sec] = cant
+                    desglose_seleccionado[sec] = desglose_seleccionado.get(sec, 0) + cant
                     total_cupos += cant * int(c.get("integrantes_por_banca", 1))
 
         if st.form_submit_button("Enviar Preinscripción"):
@@ -249,7 +249,6 @@ else:
     escuela_actual = st.session_state["escuela_info"]
     id_del_activo = st.session_state["id_delegacion_activa"]
     
-    # Recargar info institucional en tiempo real
     doc_actualizado = db.collection("delegaciones").document(id_del_activo).get()
     if doc_actualizado.exists:
         escuela_actual = doc_actualizado.to_dict()
@@ -264,7 +263,6 @@ else:
 
     st.sidebar.button("📊 Estado de mi Institución", use_container_width=True)
     
-    # Módulo de Pago se habilita solo si la secretaría asignó costo (>0)
     if costo_asignado > 0:
         if st.sidebar.button("💳 Pagos y Facturación", use_container_width=True):
             st.session_state["sub_menu"] = "Pago"
@@ -276,7 +274,6 @@ else:
         st.session_state["sub_menu"] = "Seguro"
         st.rerun()
 
-    # Módulo de Nómina se habilita solo si el sorteo ya se ejecutó y hay bancas asignadas
     if tiene_bancas:
         if st.sidebar.button("📋 Carga de Nómina y Alumnos", use_container_width=True):
             st.session_state["sub_menu"] = "Nomina"
