@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Estilo moderno adaptable a Modo Oscuro y Claro
+# Estilo moderno adaptable a Modo Oscuro y Claro con diseño centrado para el logo
 modern_styling = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -44,9 +44,11 @@ modern_styling = """
     
     .portal-header {
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 20px;
+        text-align: center;
+        gap: 15px;
         padding: 1.5rem;
         margin-bottom: 2rem;
         border-radius: 16px;
@@ -55,8 +57,8 @@ modern_styling = """
     }
     
     .portal-logo {
-        width: 75px;
-        height: 75px;
+        max-width: 220px;
+        height: auto;
         object-fit: contain;
         filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
     }
@@ -78,9 +80,10 @@ modern_styling = """
 
     @media (max-width: 768px) {
         .portal-header {
-            flex-direction: column;
-            text-align: center;
             padding: 1rem;
+        }
+        .portal-logo {
+            max-width: 160px;
         }
         .portal-title-container h1 {
             font-size: 1.4rem;
@@ -96,7 +99,7 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# Carga segura y tolerante a fallos de secretos (soporta formato plano o anidado)
+# Carga segura y tolerante a fallos de secretos
 try:
     API_URL = st.secrets.get("API_URL") or st.secrets["api"]["URL"]
 except Exception:
@@ -112,14 +115,15 @@ try:
 except Exception:
     FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
 
-ESCUDO_URL = "https://cdn-icons-png.flaticon.com/512/330/330455.png"
+# URL directa del archivo 'logo' en GitHub (reemplaza 'tu_usuario', 'tu_repositorio' y la rama de ser necesario, ej: 'main')
+LOGO_URL = "https://raw.githubusercontent.com/tu_usuario/tu_repositorio/main/logo"
 
 
 def mostrar_encabezado_portal():
     st.markdown(
         f"""
         <div class="portal-header">
-            <img src="{ESCUDO_URL}" class="portal-logo" alt="Escudo Organización">
+            <img src="{LOGO_URL}" class="portal-logo" alt="Escudo ANU-AR MUN">
             <div class="portal-title-container">
                 <h1>Portal de Instituciones</h1>
                 <p>Gestión Oficial y Preinscripciones — Modelos ONU</p>
