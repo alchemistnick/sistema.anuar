@@ -172,7 +172,7 @@ if st.session_state["modo_preinscripcion"]:
     with st.expander("ℹ️ Instrucciones e Información de Preinscripción", expanded=True):
         st.markdown("""
         - Complete todos los datos institucionales y del docente responsable.
-        - Seleccione la cantidad de delegaciones que desea postular para cada sección o comité disponible.
+        - Seleccione la cantidad de delegaciones que desea postular para cada sección agrupada disponible.
         - Guarde su **Clave de Acceso**, ya que la necesitará para ingresar al sistema posteriormente y gestionar su documentación, pagos y nómina.
         """)
 
@@ -201,22 +201,30 @@ if st.session_state["modo_preinscripcion"]:
             secret_hash = st.text_input("Clave de Acceso Personalizada *:", type="password")
 
         st.markdown("---")
-        st.markdown("### 🏛️ Desglose de Delegaciones por Sección / Comité")
+        st.markdown("### 🏛️ Desglose de Delegaciones por Sección")
         
         desglose_seleccionado = {}
         total_cupos = 0
         if comites:
-            for idx, c in enumerate(comites):
+            secciones_agrupadas = {}
+            for c in comites:
                 sec = str(c.get("clave_seccion", "GENERAL")).strip()
-                organo = str(c.get("organo_comite", "")).strip()
-                integrantes = int(c.get("integrantes_por_banca", 1))
-                max_del = c.get("max_delegaciones_seccion", "Sin límite")
+                if sec not in secciones_agrupadas:
+                    secciones_agrupadas[sec] = {
+                        "organos": [],
+                        "integrantes_por_banca": int(c.get("integrantes_por_banca", 1))
+                    }
+                secciones_agrupadas[sec]["organos"].append(str(c.get("organo_comite", "")).strip())
+
+            for idx, (sec, datos_sec) in enumerate(secciones_agrupadas.items()):
+                lista_organos = ", ".join(datos_sec["organos"])
+                integrantes = datos_sec["integrantes_por_banca"]
                 
-                st.markdown(f"**Sección:** `{sec}` | **Órgano:** *{organo}* | **Integrantes por banca:** {integrantes} | **Máximo delegaciones:** {max_del}")
-                cant = st.number_input(f"Cantidad de delegaciones para {sec} ({organo}):", min_value=0, value=0, key=f"sec_{sec}_{idx}")
+                st.markdown(f"**Sección / Modalidad:** `{sec}` | **Órganos incluidos:** *{lista_organos}* | **Integrantes por banca:** {integrantes}")
+                cant = st.number_input(f"Cantidad de delegaciones para la sección {sec}:", min_value=0, value=0, key=f"sec_{sec}_{idx}")
                 
                 if cant > 0:
-                    desglose_seleccionado[sec] = desglose_seleccionado.get(sec, 0) + cant
+                    desglose_seleccionado[sec] = cant
                     total_cupos += cant * integrantes
         else:
             st.warning("⚠️ No hay comités configurados para este modelo todavía.")
