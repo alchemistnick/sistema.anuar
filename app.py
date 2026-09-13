@@ -209,23 +209,27 @@ if st.session_state["modo_preinscripcion"]:
             secciones_agrupadas = {}
             for c in comites:
                 sec = str(c.get("clave_seccion", "GENERAL")).strip()
+                organo = str(c.get("organo_comite", "")).strip()
+                integrantes = int(c.get("integrantes_por_banca", 1))
+                
                 if sec not in secciones_agrupadas:
                     secciones_agrupadas[sec] = {
-                        "organos": [],
-                        "integrantes_por_banca": int(c.get("integrantes_por_banca", 1))
+                        "detalles_organos": []
                     }
-                secciones_agrupadas[sec]["organos"].append(str(c.get("organo_comite", "")).strip())
+                secciones_agrupadas[sec]["detalles_organos"].append(f"{organo} ({integrantes} int.)")
 
             for idx, (sec, datos_sec) in enumerate(secciones_agrupadas.items()):
-                lista_organos = ", ".join(datos_sec["organos"])
-                integrantes = datos_sec["integrantes_por_banca"]
+                lista_organos_int = ", ".join(datos_sec["detalles_organos"])
                 
-                st.markdown(f"**Sección / Modalidad:** `{sec}` | **Órganos incluidos:** *{lista_organos}* | **Integrantes por banca:** {integrantes}")
+                st.markdown(f"**Sección / Modalidad:** `{sec}` | **Órganos e integrantes:** *{lista_organos_int}*")
                 cant = st.number_input(f"Cantidad de delegaciones para la sección {sec}:", min_value=0, value=0, key=f"sec_{sec}_{idx}")
                 
                 if cant > 0:
                     desglose_seleccionado[sec] = cant
-                    total_cupos += cant * integrantes
+                    for c in comites:
+                        if str(c.get("clave_seccion", "")).strip() == sec:
+                            total_cupos += cant * int(c.get("integrantes_por_banca", 1))
+                            break
         else:
             st.warning("⚠️ No hay comités configurados para este modelo todavía.")
 
