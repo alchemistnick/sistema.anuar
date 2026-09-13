@@ -343,7 +343,7 @@ if st.session_state["modo_preinscripcion"]:
             secret_hash = st.text_input("Clave de Acceso *:", type="password", key="pre_hash").strip()
 
         st.markdown("---")
-        st.markdown("### 🇺🇳 Comisiones")
+        st.markdown("### 🇺🇳 Comisiones y Limitaciones de Preinscripción")
 
         desglose_seleccionado = {}
         total_cupos_calculados = 0
@@ -354,17 +354,32 @@ if st.session_state["modo_preinscripcion"]:
             for c in comites:
                 sec = str(c.get("clave_seccion", "GENERAL")).strip()
                 secciones.setdefault(sec, []).append(c)
+                
+                excluye_raw = str(c.get("excluye_secciones", "")).strip()
+                if excluye_raw and excluye_raw.lower() != "nan":
+                    exclusiones_map.setdefault(sec, set())
+                    for e in excluye_raw.split(","):
+                        if e.strip():
+                            exclusiones_map[sec].add(e.strip())
 
             for sec_nombre, lista_comites in secciones.items():
                 col_sec, col_cant = st.columns([3, 1])
                 nombres_comites = ", ".join([str(x.get("organo_comite", "")) for x in lista_comites])
                 integrantes_totales = sum([int(x.get("integrantes_por_banca", 1)) for x in lista_comites])
-                max_permiso = int(lista_comites[0].get("max_delegaciones_seccion", 4))
+
+                max_permiso = 4
+                for x in lista_comites:
+                    val_max = x.get("max_delegaciones_seccion")
+                    if val_max is not None and str(val_max).isdigit():
+                        max_permiso = int(val_max)
+                        break
+
+                opciones_cant = list(range(0, max_permiso + 1))
 
                 with col_sec:
-                    st.write(f"**Sección {sec_nombre}:** {nombres_comites} (*{integrantes_totales} part. por delegación*)")
+                    st.write(f"**Sección {sec_nombre}:** {nombres_comites} (*{integrantes_totales} part. por delegación - Máx: {max_permiso}*)")
                 with col_cant:
-                    cant = st.selectbox(f"Cant ({sec_nombre}):", options=list(range(0, max_permiso + 1)), key=f"sec_{sec_nombre}")
+                    cant = st.selectbox(f"Cant ({sec_nombre}):", options=opciones_cant, key=f"sec_{sec_nombre}")
                     if cant > 0:
                         desglose_seleccionado[sec_nombre] = cant
                         total_cupos_calculados += cant * integrantes_totales
@@ -375,39 +390,56 @@ if st.session_state["modo_preinscripcion"]:
         st.info(f"📊 **Total de participantes acumulados:** {total_cupos_calculados} estudiantes.")
 
         if not comites:
-            st.error("❌ Botón bloqueado: Faltan comisiones parametrizadas.")
+            st.error("❌ Botón bloqueado: Faltan comisiones parametrizadas para este modelo.")
             submitted = st.form_submit_button("Enviar Preinscripción", disabled=True)
         else:
             submitted = st.form_submit_button("Enviar Preinscripción")
 
         if submitted:
-            if not all([nombre_colegio.strip(), direccion_escuela.strip(), email_institucional.strip(), telefono_institucional.strip(), docente_apellido_nombre.strip(), docente_email.strip(), docente_telefono.strip(), secret_hash.strip()]):
+            if not comites:
+                st.error("❌ No se puede enviar la preinscripción: faltan parametrizar las comisiones.")
+            elif not all([nombre_colegio.strip(), direccion_escuela.strip(), email_institucional.strip(), telefono_institucional.strip(), docente_apellido_nombre.strip(), docente_email.strip(), docente_telefono.strip(), secret_hash.strip()]):
                 st.error("❌ Todos los campos son obligatorios.")
-            elif total_cupos_calculados == 0:
-                st.error("Seleccione al menos 1 delegación.")
             else:
-                datos_escuela = {
-                    "nombre_colegio": nombre_colegio,
-                    "direccion_escuela": direccion_escuela,
-                    "email_institucional": email_institucional,
-                    "telefono_institucional": telefono_institucional,
-                    "docente_apellido_nombre": docente_apellido_nombre,
-                    "docente_email": docente_email,
-                    "docente_telefono": docente_telefono,
-                    "cupos_solicitados": total_cupos_calculados,
-                    "desglose_modalidades": str(desglose_seleccionado),
-                    "docentes_acompanantes": docentes_acompanantes,
-                    "secret_hash": secret_hash,
-                    "id_modelo": id_modelo_elegido,
-                }
-                ok, msg = preinscribir_escuela(datos_escuela)
-                if ok:
-                    st.success(f"¡Preinscripción exitosa! Usuario: **{docente_email}**")
-                    notificar_apps_script("NUEVA_PREINSCRIPCION", {"id_delegacion": msg, "docente_email": docente_email})
-                    st.session_state["limpiar_formulario"] = True
-                    st.rerun()
-                else:
-                    st.error(msg)
+                error_exclusion = False
+                secciones_elegidas = list(desglose_seleccionado.keys())
+                
+                for sec in secciones_elegidas:
+                    if sec in exclusiones_map:
+                        for prohibida in exclusiones_map[sec]:
+                            if prohibida in secciones_elegidas:
+                                st.error(f"❌ **Incompatibilidad detectada:** No puede seleccionar simultáneamente las secciones **'{sec}'** y **'{prohibida}'** ya que se excluyen mutuamente.")
+                                error_exclusion = True
+                                break
+                    if error_exclusion:
+                        break
+
+                if not error_exclusion:
+                    if total_cupos_calculados == 0:
+                        st.error("Seleccione al menos 1 delegación para inscribir.")
+                    else:
+                        datos_escuela = {
+                            "nombre_colegio": nombre_colegio,
+                            "direccion_escuela": direccion_escuela,
+                            "email_institucional": email_institucional,
+                            "telefono_institucional": telefono_institucional,
+                            "docente_apellido_nombre": docente_apellido_nombre,
+                            "docente_email": docente_email,
+                            "docente_telefono": docente_telefono,
+                            "cupos_solicitados": total_cupos_calculados,
+                            "desglose_modalidades": str(desglose_seleccionado),
+                            "docentes_acompanantes": docentes_acompanantes,
+                            "secret_hash": secret_hash,
+                            "id_modelo": id_modelo_elegido,
+                        }
+                        ok, msg = preinscribir_escuela(datos_escuela)
+                        if ok:
+                            st.success(f"¡Preinscripción exitosa! Usuario: **{docente_email}**")
+                            notificar_apps_script("NUEVA_PREINSCRIPCION", {"id_delegacion": msg, "docente_email": docente_email})
+                            st.session_state["limpiar_formulario"] = True
+                            st.rerun()
+                        else:
+                            st.error(msg)
 
 elif not st.session_state["docente_autenticado"]:
     st.subheader("🔑 Inicio de Sesión - Portal de Instituciones")
