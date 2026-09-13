@@ -95,11 +95,23 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
-API_URL = st.secrets["api"]["URL"]
 
-# Carga segura de carpetas desde st.secrets
-FOLDER_COMPROBANTES = st.secrets["drive"]["folder_comprobantes"]
-FOLDER_FICHAS = st.secrets["drive"]["folder_fichas"]
+# Carga segura y tolerante a fallos de secretos (soporta formato plano o anidado)
+try:
+    API_URL = st.secrets.get("API_URL") or st.secrets["api"]["URL"]
+except Exception:
+    API_URL = ""
+
+try:
+    FOLDER_COMPROBANTES = st.secrets.get("folder_comprobantes") or st.secrets["drive"]["folder_comprobantes"]
+except Exception:
+    FOLDER_COMPROBANTES = "1-QVd95Y2butIg9DNp3cPuIQI6sII50Rk"
+
+try:
+    FOLDER_FICHAS = st.secrets.get("folder_fichas") or st.secrets["drive"]["folder_fichas"]
+except Exception:
+    FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
+
 ESCUDO_URL = "https://cdn-icons-png.flaticon.com/512/330/330455.png"
 
 
