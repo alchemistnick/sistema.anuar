@@ -76,7 +76,7 @@ except Exception:
 def mostrar_encabezado_portal():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # Apunta a logo.jpg en la rama main de tu repositorio
+        # URL corregida apuntando correctamente al raw de GitHub
         logo_url = "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo.jpg"
         try:
             st.image(logo_url, use_container_width=True)
