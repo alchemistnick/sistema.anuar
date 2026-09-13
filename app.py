@@ -72,17 +72,35 @@ try:
 except Exception:
     FOLDER_FICHAS = "1VSSud30QL9nSLbfu4jAz-dJ9q2rcRg1E"
 
-# URL directa y corregida al archivo 'logo' en tu repositorio de GitHub
-LOGO_URL = "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo"
-
 
 def mostrar_encabezado_portal():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        try:
-            st.image(LOGO_URL, use_container_width=True)
-        except Exception:
-            pass
+        # Intento de carga directa desde GitHub crudo o usando una imagen por respaldo segura
+        logo_urls = [
+            "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo",
+            "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo.png",
+            "https://raw.githubusercontent.com/alchemisknick/sistema.anuar/main/logo.jpeg"
+        ]
+        
+        imagen_cargada = False
+        for url in logo_urls:
+            try:
+                st.image(url, use_container_width=True)
+                imagen_cargada = True
+                break
+            except Exception:
+                continue
+                
+        if not imagen_cargada:
+            st.markdown(
+                """
+                <div style="text-align: center; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; margin-bottom: 10px;">
+                    <h2 style="margin: 0; color: #2563eb; font-weight: 800;">MUN — ANU-AR</h2>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         
         st.markdown(
             """
