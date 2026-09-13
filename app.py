@@ -254,20 +254,22 @@ if menu == "📝 Preinscripción Institucional":
                     secciones[sec] = []
                 secciones[sec].append(c)
                 
-                # Recogemos las exclusiones configuradas por sección
+                # Recogemos las exclusiones a nivel de sección
                 excluye_raw = str(c.get("excluye_secciones", "")).strip()
                 if excluye_raw and excluye_raw.lower() != "nan":
-                    exclusiones_map[sec] = [e.strip() for e in excluye_raw.split(",") if e.strip()]
+                    if sec not in exclusiones_map:
+                        exclusiones_map[sec] = set()
+                    for e in excluye_raw.split(","):
+                        if e.strip():
+                            exclusiones_map[sec].add(e.strip())
 
-            # Determinamos dinámicamente si alguna sección fue seleccionada con cantidad > 0
+            # Detectamos qué secciones tienen cantidad seleccionada mayor a 0
             secciones_activas = []
             for sec_nombre in secciones.keys():
-                # Leemos la selección temporal en la UI
-                cant_temp = st.session_state.get(f"sec_{sec_nombre}", 0)
-                if cant_temp > 0:
+                if st.session_state.get(f"sec_{sec_nombre}", 0) > 0:
                     secciones_activas.append(sec_nombre)
 
-            # Verificamos si alguna sección activa bloquea a otras
+            # Mapeamos qué secciones deben bloquearse por incompatibilidad
             secciones_bloqueadas = set()
             for sec_activa in secciones_activas:
                 if sec_activa in exclusiones_map:
@@ -288,13 +290,12 @@ if menu == "📝 Preinscripción Institucional":
 
                 with col_sec:
                     if sec_nombre in secciones_bloqueadas:
-                        st.markdown(f"**Sección {sec_nombre}:** {nombres_comites} ❌ *(Bloqueada por otra selección incompatible)*")
+                        st.markdown(f"**Sección {sec_nombre}:** {nombres_comites} ❌ *(Bloqueada por incompatibilidad con otra sección seleccionada)*")
                     else:
                         st.write(f"**Sección {sec_nombre}:** {nombres_comites} (*{integrantes_totales} participantes por delegación - Máx: {max_permiso}*)")
 
                 with col_cant:
                     if sec_nombre in secciones_bloqueadas:
-                        # Si está bloqueada, forzamos cantidad a 0 y deshabilitamos
                         st.number_input(f"Cantidad ({sec_nombre}):", min_value=0, max_value=0, value=0, key=f"sec_{sec_nombre}", disabled=True)
                     else:
                         opciones_cant = list(range(0, max_permiso + 1))
